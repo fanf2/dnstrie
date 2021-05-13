@@ -1,4 +1,3 @@
-mod bmp;
 mod bmpvec;
 
 fn main() {
