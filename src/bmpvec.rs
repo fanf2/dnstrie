@@ -143,7 +143,10 @@ impl<T> BmpVec<T> {
         let (mut bmp, mut vec) = self.as_cooked_parts();
         let ret = mutate(&mut vec, bmp & mask, arg);
         bmp ^= bit;
-        *self = BmpVec::from_cooked_parts(bmp, vec);
+        std::mem::forget(std::mem::replace(
+            self,
+            BmpVec::from_cooked_parts(bmp, vec),
+        ));
         ret
     }
 }
