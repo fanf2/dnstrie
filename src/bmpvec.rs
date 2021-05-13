@@ -22,9 +22,9 @@ impl<T> BmpVec<T> {
         // ensure there is no excess capacity
         // because we don't have space to remember it
         let shrunk = vec.into_boxed_slice();
-        // get a raw pointer to the slice
+        // get a raw pointer to the slice as *mut [T]
         let slice = Box::into_raw(shrunk);
-        // coerce to the element type for use by pointer::offset()
+        // coerce to the element type for use by pointer::add()
         let ptr = slice as *mut T;
         BmpVec { bmp, ptr }
     }
