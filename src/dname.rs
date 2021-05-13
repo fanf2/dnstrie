@@ -39,8 +39,8 @@ const fn gen_byte_to_bits() -> [u16; 256] {
 
 const fn for_byte_to_bits_hi(gen: TableGen, hi: u8) -> [u16; 256] {
     let gen = for_byte_to_bits_lo(gen, hi, 0);
-    if hi < 240 {
-        for_byte_to_bits_hi(gen, hi + 16)
+    if hi < 0xF0 {
+        for_byte_to_bits_hi(gen, hi + 0x10)
     } else {
         gen.table
     }
@@ -76,8 +76,8 @@ const fn for_byte_to_bits_lo(mut gen: TableGen, hi: u8, lo: u8) -> TableGen {
             gen.bit_two += 1;
         }
     }
-    if lo < 15 {
-        for_byte_to_bits_lo(gen, hi, lo + 1)
+    if lo < 0x0F {
+        for_byte_to_bits_lo(gen, hi, lo + 0x01)
     } else {
         gen
     }
