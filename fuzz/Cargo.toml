@@ -1,0 +1,25 @@
+[package]
+name = "dnstrie-fuzz"
+version = "0.0.0"
+authors = ["Tony Finch <dot@dotat.at>"]
+edition = "2018"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.dnstrie]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz"
+path = "src/fuzz.rs"
+test = false
+doc = false
