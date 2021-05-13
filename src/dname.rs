@@ -15,7 +15,6 @@ const SHIFT_OFFSET: u8 = 48;
 /// between '_' and lower case letters) are treated the same way as
 /// hostname characters so that the escaped ranges are simpler.
 
-
 // I can't write a for loop in a const fn, but I can use tail
 // recursion, to a limited extent. I'm using two nested tail-recursive
 // loops to limit the stack depth to 32, to avoid hitting compile-time
@@ -48,7 +47,7 @@ const fn for_byte_to_bits_hi(gen: TableGen, hi: u8) -> [u16; 256] {
 }
 
 const fn for_byte_to_bits_lo(mut gen: TableGen, hi: u8, lo: u8) -> TableGen {
-    let byte = (hi | lo);
+    let byte = hi | lo;
     let i = byte as usize;
     match byte {
         // common characters
@@ -61,10 +60,9 @@ const fn for_byte_to_bits_lo(mut gen: TableGen, hi: u8, lo: u8) -> TableGen {
         b'A'..=b'Z' => {
             gen.table[i] = (
                 (gen.bit_one + 1) + // bump past escape character
-                 (b'a' - b'_') + // and skip non-letters
-                 (byte - b'A')
-                // count the alphabet
-            ) as u16;
+                    (b'a' - b'_') + // and skip non-letters
+                    (byte - b'A'))  // count the alphabet
+                as u16;
         }
         // non-hostname characters need to be escaped
         _ => {

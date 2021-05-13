@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod bmpvec;
 mod dname;
 
@@ -10,7 +12,7 @@ fn main() {
             print!(" {:04x}", bits);
         }
         if byte & 7 == 7 {
-            print!("\n");
+            println!();
         }
     }
 }
