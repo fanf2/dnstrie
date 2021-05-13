@@ -89,41 +89,62 @@ impl<T> BmpVec<T> {
     where
         N: TryInto<u8> + Copy + std::fmt::Debug,
     {
-        match bitmask(pos) {
-            Some((bit, mask)) if self.bmp & bit => unsafe {
-                self.mask_ptr(mask)
-                    .as_mut()
-                    .map(|elem| std::mem::replace(elem, val))
-            },
-            Some((bit, mask)) => {
-                let (mut bmp, mut vec) = self.as_cooked_parts();
-                let rank = bmp & mask;
-                bmp ^= bit;
-                // try to avoid growing too much then immediately shrinking
-                vec.reserve(1);
-                vec.insert(rank, val);
-                *self = BmpVec::from_cooked_parts(bmp, vec);
-                None
-            }
-            None => panic!("BmpVec position {:?} out of range", pos),
-        }
+        self.set(pos, Some(val))
     }
 
     pub fn remove<N>(&mut self, pos: N) -> Option<T>
     where
         N: TryInto<u8> + Copy + std::fmt::Debug,
     {
-        match bitmask(pos) {
-            Some((bit, mask)) if self.bmp & bit => {
-                let (mut bmp, mut vec) = self.as_cooked_parts();
-                let rank = bmp & mask;
-                bmp ^= bit;
-                let old = vec.remove(rank);
-                *self = BmpVec::from_cooked_parts(bmp, vec);
-                Some(old)
+        self.set(pos, None)
+    }
+
+    pub fn set<N>(&mut self, pos: N, val: Option<T>) -> Option<T>
+    where
+        N: TryInto<u8> + Copy + std::fmt::Debug,
+    {
+        match (bitmask(pos), val) {
+            (Some((bit, mask)), Some(val)) if self.bmp & bit => unsafe {
+                self.mask_ptr(mask)
+                    .as_mut()
+                    .map(|entry| std::mem::replace(entry, val))
+            },
+            (Some((bit, mask)), Some(val)) => {
+                self.with_cooked_parts(bit, mask, val, |vec, rank, val| {
+                    // try to avoid growing too much then immediately shrinking
+                    vec.reserve(1);
+                    vec.insert(rank, val);
+                    None
+                })
+            }
+            #[rustfmt::skip] // bananas
+            (Some((bit, mask)), None) if self.bmp & bit => {
+                self.with_cooked_parts(bit, mask, (), |vec, rank, _| {
+                    Some(vec.remove(rank))
+                })
+            },
+            (None, Some(_)) => {
+                panic!("BmpVec position {:?} out of range", pos)
             }
             _ => None,
         }
+    }
+
+    fn with_cooked_parts<F, A>(
+        &mut self,
+        bit: Bit,
+        mask: Mask,
+        arg: A,
+        mutate: F,
+    ) -> Option<T>
+    where
+        F: Fn(&mut Vec<T>, usize, A) -> Option<T>,
+    {
+        let (mut bmp, mut vec) = self.as_cooked_parts();
+        let ret = mutate(&mut vec, bmp & mask, arg);
+        bmp ^= bit;
+        *self = BmpVec::from_cooked_parts(bmp, vec);
+        ret
     }
 }
 
