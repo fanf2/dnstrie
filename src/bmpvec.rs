@@ -12,6 +12,12 @@ impl<T> Drop for BmpVec<T> {
     }
 }
 
+impl<T> Default for BmpVec<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> BmpVec<T> {
     pub fn new() -> BmpVec<T> {
         BmpVec::from_cooked_parts(Bmp::new(), Vec::new())
