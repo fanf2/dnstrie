@@ -1,8 +1,8 @@
 //! BlimpVec, a test oracle for BmpVec
 //! ==================================
 //!
-//! This is a container type that should work the same as BmpVec, but
-//! it's simpler: no compression, no unsafe code.
+//! This is a container type that should work the same as BmpVec,
+//! but it's simpler: no compression, no unsafe code.
 
 use std::convert::TryInto;
 
