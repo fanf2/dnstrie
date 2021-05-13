@@ -80,9 +80,17 @@ impl<T> BlimpVec<T> {
     where
         N: TryInto<u8> + Copy + std::fmt::Debug,
     {
-        match self.get_pos(pos) {
+        let somenew = val.as_ref().is_some();
+        let old = match self.get_pos(pos) {
             Some(pos) => std::mem::replace(&mut self.vec[pos], val),
             None => panic!("BlimpVec position {:?} out of range", pos),
+        };
+        let someold = old.as_ref().is_some();
+        match (someold, somenew) {
+            (false, true) => self.len += 1,
+            (true, false) => self.len -= 1,
+            _ => (),
         }
+        old
     }
 }
