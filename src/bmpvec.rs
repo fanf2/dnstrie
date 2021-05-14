@@ -20,7 +20,7 @@ use std::marker::PhantomData;
 
 /// A [`BmpVec`] is a sparse vector of up to 64 elements.
 ///
-/// The elements are numbered between 0 and 63.
+/// The elements are numbered from 0 through 63.
 ///
 /// The `BmpVec` only stores the elements that are present, not the gaps
 /// between them. Unlike a [`Vec`], there is no extra capacity. The storage
@@ -74,6 +74,23 @@ impl<T> BmpVec<T> {
     ///
     pub fn len(&self) -> usize {
         self.bmp.len()
+    }
+
+    /// An iterator visiting the position and value of each element in the `BmpVec`.
+    pub fn iter(&self) -> Iter<T> {
+        Iter { vec: self, pos: self.bmp.iter() }
+    }
+
+    /// An iterator visiting the position of each element in the `BmpVec`,
+    /// from 0 through 63.
+    pub fn keys(&self) -> bmp::Iter {
+        self.bmp.iter()
+    }
+
+    /// An iterator visiting each element in the `BmpVec`.
+    pub fn values(&self) -> std::slice::Iter<T> {
+        let (_, slice) = self.borrow_cooked_parts();
+        slice.iter()
     }
 
     /// Returns `true` if there is an element at the given `pos`ition.
@@ -234,6 +251,14 @@ impl<T> BmpVec<T> {
         BmpVec { bmp, ptr, _marker: PhantomData }
     }
 
+    /// Expand a `BmpVec` into a bitmap and a slice of elements
+    ///
+    fn borrow_cooked_parts(&self) -> (Bmp, &[T]) {
+        let len = self.len();
+        // SAFETY: we guarantee that our length matches the allocation
+        (self.bmp, unsafe { std::slice::from_raw_parts(self.ptr, len) })
+    }
+
     /// Consume a `BmpVec` and expand it into a pair of a bitmap and vector.
     ///
     /// The vector is easily mutable, unlike the raw pointer inside the
@@ -271,6 +296,26 @@ impl<T> BmpVec<T> {
         bitmask(pos)
             .filter(|&(bit, _)| self.bmp & bit)
             .map(|(_, mask)| self.ptr.add(self.bmp & mask))
+    }
+}
+
+impl<'a, T> IntoIterator for &'a BmpVec<T> {
+    type Item = (u8, &'a T);
+    type IntoIter = Iter<'a, T>;
+    fn into_iter(self) -> Iter<'a, T> {
+        self.iter()
+    }
+}
+
+pub struct Iter<'a, T> {
+    vec: &'a BmpVec<T>,
+    pos: bmp::Iter,
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = (u8, &'a T);
+    fn next(&mut self) -> Option<(u8, &'a T)> {
+        self.pos.next().map(|pos| (pos, self.vec.get(pos).unwrap()))
     }
 }
 
@@ -349,6 +394,7 @@ mod bmp {
             (self.0 & mask.0).count_ones() as usize
         }
     }
+
     impl Bmp {
         /// Create an empty bitmap
         pub const fn new() -> Bmp {
@@ -363,6 +409,12 @@ mod bmp {
         /// Number of bits set in the bitmap
         pub fn len(self) -> usize {
             self.0.count_ones() as usize
+        }
+
+        /// An iterator visiting the index of each set bit in the bitmap,
+        /// from 0 through 63.
+        pub fn iter(self) -> Iter {
+            self.into_iter()
         }
 
         /// Create a bitmap from some previously-obtained guts.
@@ -385,6 +437,35 @@ mod bmp {
         ///
         pub unsafe fn into_raw_parts(self) -> u64 {
             self.0
+        }
+    }
+
+    /// An iterator visiting the index of each set bit in the bitmap,
+    /// from 0 through 63.
+    ///
+    pub struct Iter {
+        bmp: Bmp,
+        pos: u8,
+    }
+
+    impl Iterator for Iter {
+        type Item = u8;
+        fn next(&mut self) -> Option<u8> {
+            for i in self.pos..=63 {
+                if (self.bmp.0 & 1 << i) != 0 {
+                    self.pos = i + 1;
+                    return Some(i);
+                }
+            }
+            None
+        }
+    }
+
+    impl IntoIterator for Bmp {
+        type Item = u8;
+        type IntoIter = Iter;
+        fn into_iter(self) -> Iter {
+            Iter { bmp: self, pos: 0 }
         }
     }
 }
