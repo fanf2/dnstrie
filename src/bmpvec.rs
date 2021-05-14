@@ -16,6 +16,7 @@
 
 use bmp::*;
 use std::convert::TryInto;
+use std::ptr::NonNull;
 
 /// A [`BmpVec`] is a sparse vector of up to 64 elements.
 ///
@@ -32,7 +33,7 @@ use std::convert::TryInto;
 ///
 pub struct BmpVec<T> {
     bmp: Bmp,
-    ptr: *mut T,
+    ptr: NonNull<T>,
 }
 
 impl<T> Drop for BmpVec<T> {
@@ -181,7 +182,9 @@ impl<T> BmpVec<T> {
     /// The ownership of ptr is transferred to the `BmpVec`.
     ///
     pub unsafe fn from_raw_parts(bmp: u64, ptr: *mut T) -> BmpVec<T> {
-        BmpVec { bmp: Bmp::from_raw_parts(bmp), ptr }
+        let bmp = Bmp::from_raw_parts(bmp);
+        let ptr = NonNull::new_unchecked(ptr);
+        BmpVec { bmp, ptr }
     }
 
     /// Unwrap a `BmpVec` into a raw bitmap and pointer.
@@ -195,7 +198,7 @@ impl<T> BmpVec<T> {
     /// convert the raw parts back using [`BmpVec::from_raw_parts()`]
     ///
     pub unsafe fn into_raw_parts(self) -> (u64, *mut T) {
-        (self.bmp.into_raw_parts(), self.ptr)
+        (self.bmp.into_raw_parts(), self.ptr.as_ptr())
     }
 
     /// Construct a `BmpVec` from a pair of a bitmap and vector.
@@ -214,10 +217,8 @@ impl<T> BmpVec<T> {
         // ensure there is no excess capacity
         // because we don't have space to remember it
         let shrunk = vec.into_boxed_slice();
-        // get a raw pointer to the slice as *mut [T]
         let slice = Box::into_raw(shrunk);
-        // coerce to the element type for use by pointer::add()
-        let ptr = slice as *mut T;
+        let ptr = unsafe { NonNull::new_unchecked(slice as *mut T) };
         BmpVec { bmp, ptr }
     }
 
@@ -227,15 +228,17 @@ impl<T> BmpVec<T> {
     /// `BmpVec`.
     ///
     fn into_cooked_parts(self) -> (Bmp, Vec<T>) {
+        let ptr = self.ptr.as_ptr();
         let len = self.bmp.into();
-        unsafe { (self.bmp, Vec::from_raw_parts(self.ptr, len, len)) }
+        let vec = unsafe { Vec::from_raw_parts(ptr, len, len) };
+        (self.bmp, vec)
     }
 
     /// Turn a `BmpVec` into a paor of a bitmap and vector.
     ///
-    /// The `BmpVec` is reset to empty. After mutating, you can reconstitute
-    /// it by assigning the result of [`BmpVec::from_raw_parts()`] back to
-    /// your `BmpVec`.
+    /// The `BmpVec`'s contents are transferred to the vector and it is reset
+    /// to empty. After mutating, you can reconstitute it by assigning the
+    /// result of [`BmpVec::from_cooked_parts()`] back to your `BmpVec`.
     ///
     fn take_cooked_parts(&mut self) -> (Bmp, Vec<T>) {
         std::mem::take(self).into_cooked_parts()
@@ -267,7 +270,7 @@ impl<T> BmpVec<T> {
     /// checks in [`BmpVec::get_ptr()`].
     ///
     unsafe fn ptr_plus(&self, mask: Mask) -> *mut T {
-        self.ptr.add(self.bmp & mask)
+        self.ptr.as_ptr().add(self.bmp & mask)
     }
 }
 
