@@ -93,6 +93,8 @@ impl<T> BmpVec<T> {
     where
         N: TryInto<u8>,
     {
+        // SAFETY: get_ptr() returns us a valid pointer, and we ensure the
+        // mutability of the resulting ref matches self's mutability
         unsafe { self.get_ptr(pos).and_then(|ptr| ptr.as_ref()) }
     }
 
@@ -104,6 +106,8 @@ impl<T> BmpVec<T> {
     where
         N: TryInto<u8>,
     {
+        // SAFETY: get_ptr() returns us a valid pointer, and we ensure the
+        // mutability of the resulting ref matches self's mutability
         unsafe { self.get_ptr(pos).and_then(|ptr| ptr.as_mut()) }
     }
 
@@ -151,11 +155,10 @@ impl<T> BmpVec<T> {
         N: TryInto<u8> + Copy + std::fmt::Debug,
     {
         match (bitmask(pos), val) {
-            (Some((bit, mask)), Some(val)) if self.bmp & bit => unsafe {
-                self.ptr_plus(mask)
-                    .as_mut()
-                    .map(|entry| std::mem::replace(entry, val))
-            },
+            (Some((bit, _)), Some(val)) if self.bmp & bit => {
+                // does not panic because we checked self.bmp & bit
+                Some(std::mem::replace(self.get_mut(pos).unwrap(), val))
+            }
             (Some((bit, mask)), Some(val)) => {
                 let (bmp, mut vec) = self.take_cooked_parts();
                 // try to avoid growing too much then immediately shrinking
@@ -196,7 +199,7 @@ impl<T> BmpVec<T> {
         BmpVec { bmp, ptr, _marker: PhantomData }
     }
 
-    /// Unwrap a `BmpVec` into a raw bitmap and pointer.
+    /// Unpack a `BmpVec` into a raw bitmap and pointer.
     ///
     /// This consumes the `BitVec`.
     ///
@@ -237,7 +240,8 @@ impl<T> BmpVec<T> {
     /// `BmpVec`.
     ///
     fn into_cooked_parts(self) -> (Bmp, Vec<T>) {
-        let len = self.bmp.into();
+        let len = self.len();
+        // SAFETY: we guarantee that our length matches the allocation
         (self.bmp, unsafe { Vec::from_raw_parts(self.ptr, len, len) })
     }
 
@@ -266,18 +270,7 @@ impl<T> BmpVec<T> {
     {
         bitmask(pos)
             .filter(|&(bit, _)| self.bmp & bit)
-            .map(|(_, mask)| self.ptr_plus(mask))
-    }
-
-    /// Get a raw pointer to the `mask`'s element
-    ///
-    /// # Safety
-    ///
-    /// The element should be present for this to be meaningful, like the
-    /// checks in [`BmpVec::get_ptr()`].
-    ///
-    unsafe fn ptr_plus(&self, mask: Mask) -> *mut T {
-        self.ptr.add(self.bmp & mask)
+            .map(|(_, mask)| self.ptr.add(self.bmp & mask))
     }
 }
 
