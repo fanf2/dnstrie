@@ -73,7 +73,7 @@ impl<T> BmpVec<T> {
     /// Returns the number of elementss in the `BmpVec`
     ///
     pub fn len(&self) -> usize {
-        self.bmp.into()
+        self.bmp.len()
     }
 
     /// Returns `true` if there is an element at the given `pos`ition.
@@ -225,7 +225,7 @@ impl<T> BmpVec<T> {
     /// length of the vector.
     ///
     fn from_cooked_parts(bmp: Bmp, vec: Vec<T>) -> BmpVec<T> {
-        assert_eq!(usize::from(bmp), vec.len());
+        assert_eq!(bmp.len(), vec.len());
         // ensure there is no excess capacity
         // because we don't have space to remember it
         let shrunk = vec.into_boxed_slice();
@@ -283,8 +283,6 @@ impl<T> BmpVec<T> {
 /// [`Bmp`] is the only type with methods.
 ///
 /// There are a few operators with slightly weird but convenient behaviour:
-///
-///   * `usize::from(Bmp)` : count set bits
 ///
 ///   * `Bmp & Mask -> usize` : count set bits covered by the mask
 ///
@@ -351,13 +349,6 @@ mod bmp {
             (self.0 & mask.0).count_ones() as usize
         }
     }
-
-    impl From<Bmp> for usize {
-        fn from(bmp: Bmp) -> usize {
-            bmp.0.count_ones() as usize
-        }
-    }
-
     impl Bmp {
         /// Create an empty bitmap
         pub const fn new() -> Bmp {
@@ -367,6 +358,11 @@ mod bmp {
         /// Is the bitmap empty?
         pub fn is_empty(self) -> bool {
             self.0 == 0
+        }
+
+        /// Number of bits set in the bitmap
+        pub fn len(self) -> usize {
+            self.0.count_ones() as usize
         }
 
         /// Create a bitmap from some previously-obtained guts.
