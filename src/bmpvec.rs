@@ -16,7 +16,7 @@
 
 use bmp::*;
 use std::convert::TryInto;
-use std::ptr::NonNull;
+use std::marker::PhantomData;
 
 /// A [`BmpVec`] is a sparse vector of up to 64 elements.
 ///
@@ -33,8 +33,18 @@ use std::ptr::NonNull;
 ///
 pub struct BmpVec<T> {
     bmp: Bmp,
-    ptr: NonNull<T>,
+    ptr: *mut T,
+    // NOTE: the marker tells dropck that we logically own a `T`.
+    _marker: PhantomData<T>,
 }
+
+/// A `BmpVec<T>` is `Send` if `T` is `Send` because the data it contains is
+/// unaliased.
+unsafe impl<T: Send> Send for BmpVec<T> {}
+
+/// A `BmpVec<T>` is `Sync` if `T` is `Sync` because the data it contains is
+/// unaliased.
+unsafe impl<T: Sync> Sync for BmpVec<T> {}
 
 impl<T> Drop for BmpVec<T> {
     fn drop(&mut self) {
@@ -183,8 +193,7 @@ impl<T> BmpVec<T> {
     ///
     pub unsafe fn from_raw_parts(bmp: u64, ptr: *mut T) -> BmpVec<T> {
         let bmp = Bmp::from_raw_parts(bmp);
-        let ptr = NonNull::new_unchecked(ptr);
-        BmpVec { bmp, ptr }
+        BmpVec { bmp, ptr, _marker: PhantomData }
     }
 
     /// Unwrap a `BmpVec` into a raw bitmap and pointer.
@@ -198,7 +207,7 @@ impl<T> BmpVec<T> {
     /// convert the raw parts back using [`BmpVec::from_raw_parts()`]
     ///
     pub unsafe fn into_raw_parts(self) -> (u64, *mut T) {
-        (self.bmp.into_raw_parts(), self.ptr.as_ptr())
+        (self.bmp.into_raw_parts(), self.ptr)
     }
 
     /// Construct a `BmpVec` from a pair of a bitmap and vector.
@@ -218,8 +227,8 @@ impl<T> BmpVec<T> {
         // because we don't have space to remember it
         let shrunk = vec.into_boxed_slice();
         let slice = Box::into_raw(shrunk);
-        let ptr = unsafe { NonNull::new_unchecked(slice as *mut T) };
-        BmpVec { bmp, ptr }
+        let ptr = slice as *mut T;
+        BmpVec { bmp, ptr, _marker: PhantomData }
     }
 
     /// Consume a `BmpVec` and expand it into a pair of a bitmap and vector.
@@ -228,10 +237,8 @@ impl<T> BmpVec<T> {
     /// `BmpVec`.
     ///
     fn into_cooked_parts(self) -> (Bmp, Vec<T>) {
-        let ptr = self.ptr.as_ptr();
         let len = self.bmp.into();
-        let vec = unsafe { Vec::from_raw_parts(ptr, len, len) };
-        (self.bmp, vec)
+        (self.bmp, unsafe { Vec::from_raw_parts(self.ptr, len, len) })
     }
 
     /// Turn a `BmpVec` into a paor of a bitmap and vector.
@@ -270,7 +277,7 @@ impl<T> BmpVec<T> {
     /// checks in [`BmpVec::get_ptr()`].
     ///
     unsafe fn ptr_plus(&self, mask: Mask) -> *mut T {
-        self.ptr.as_ptr().add(self.bmp & mask)
+        self.ptr.add(self.bmp & mask)
     }
 }
 
