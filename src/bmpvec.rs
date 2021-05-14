@@ -37,7 +37,7 @@ pub struct BmpVec<T> {
 
 impl<T> Drop for BmpVec<T> {
     fn drop(&mut self) {
-        let _ = unsafe { self.as_cooked_parts() };
+        let _ = self.take_cooked_parts();
     }
 }
 
@@ -146,20 +146,19 @@ impl<T> BmpVec<T> {
                     .map(|entry| std::mem::replace(entry, val))
             },
             (Some((bit, mask)), Some(val)) => {
-                self.with_cooked_parts(val, |bmp, vec, val| {
-                    // try to avoid growing too much then immediately shrinking
-                    vec.reserve(1);
-                    vec.insert(bmp & mask, val);
-                    (bmp ^ bit, None)
-                })
+                let (bmp, mut vec) = self.take_cooked_parts();
+                // try to avoid growing too much then immediately shrinking
+                vec.reserve(1);
+                vec.insert(bmp & mask, val);
+                *self = BmpVec::from_cooked_parts(bmp ^ bit, vec);
+                None
             }
-            #[rustfmt::skip] // bananas
             (Some((bit, mask)), None) if self.bmp & bit => {
-                self.with_cooked_parts((), |bmp, vec, _| {
-                    let old = vec.remove(bmp & mask);
-                    (bmp ^ bit, Some(old))
-                })
-            },
+                let (bmp, mut vec) = self.take_cooked_parts();
+                let old = vec.remove(bmp & mask);
+                *self = BmpVec::from_cooked_parts(bmp ^ bit, vec);
+                Some(old)
+            }
             (None, Some(_)) => {
                 panic!("BmpVec position {:?} out of range", pos)
             }
@@ -199,24 +198,7 @@ impl<T> BmpVec<T> {
         (self.bmp.into_raw_parts(), self.ptr)
     }
 
-    /// Expand a `BmpVec` into a pair of a bitmap and a vector.
-    ///
-    /// The vector is easily mutable, unlike the raw pointer inside the
-    /// `BmpVec`.
-    ///
-    /// # Safety
-    ///
-    /// This does not consume the `BmpVec`, so there is danger of a double
-    /// free if both the `BmpVec` and `Vec` are dropped. The caller
-    /// must ensure that one or the other is forgotten, typically using
-    /// [`BmpVec::replace_cooked_parts()`].
-    ///
-    unsafe fn as_cooked_parts(&mut self) -> (Bmp, Vec<T>) {
-        let len = self.bmp.into();
-        (self.bmp, Vec::from_raw_parts(self.ptr, len, len))
-    }
-
-    /// Construct a `BmpVec` from a pair of a bitmap and a vector.
+    /// Construct a `BmpVec` from a pair of a bitmap and vector.
     ///
     /// The vector is consumed.
     ///
@@ -239,51 +221,24 @@ impl<T> BmpVec<T> {
         BmpVec { bmp, ptr }
     }
 
-    /// Replace a `BmpVec` with a new bitmap and vector.
+    /// Consume a `BmpVec` and expand it into a pair of a bitmap and vector.
     ///
-    /// This is for cleaning up after calling [`BmpVec::as_cooked_parts()`]
-    /// and mutating the results. The replacement is constructed using
-    /// [`BmpVec::from_cooked_parts()`].
+    /// The vector is easily mutable, unlike the raw pointer inside the
+    /// `BmpVec`.
     ///
-    /// # Safety
-    ///
-    /// This forgets the old contents of the `BmpVec` to prevent a double
-    /// free. This can lead to a leak if
-    /// [`BmpVec::replace_cooked_parts()`] is not used correctly.
-    ///
-    unsafe fn replace_cooked_parts(&mut self, bmp: Bmp, vec: Vec<T>) {
-        std::mem::forget(std::mem::replace(
-            self,
-            BmpVec::from_cooked_parts(bmp, vec),
-        ));
+    fn into_cooked_parts(self) -> (Bmp, Vec<T>) {
+        let len = self.bmp.into();
+        unsafe { (self.bmp, Vec::from_raw_parts(self.ptr, len, len)) }
     }
 
-    /// Mutate a `BmpVec` in relative safety.
+    /// Turn a `BmpVec` into a paor of a bitmap and vector.
     ///
-    /// You provide a closure which is called with the bitmap and a vector.
-    /// The closure can mutate the vector, then return a replacement bitmap
-    /// and a return value. The closure has an extra argument so that you can
-    /// pass through values with single ownership (without capturing it in
-    /// the closure).
+    /// The `BmpVec` is reset to empty. After mutating, you can reconstitute
+    /// it by assigning the result of [`BmpVec::from_raw_parts()`] back to
+    /// your `BmpVec`.
     ///
-    /// This keeps the safety requirements of [`BmpVec::as_cooked_parts()`]
-    /// and [`BmpVec::replace_cooked_parts()`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the number of bits set in the replacement bitmap is not the
-    /// same as the length of the mutated vector.
-    ///
-    fn with_cooked_parts<F, A>(&mut self, arg: A, mutate: F) -> Option<T>
-    where
-        F: Fn(Bmp, &mut Vec<T>, A) -> (Bmp, Option<T>),
-    {
-        unsafe {
-            let (bmp, mut vec) = self.as_cooked_parts();
-            let (bmp, ret) = mutate(bmp, &mut vec, arg);
-            self.replace_cooked_parts(bmp, vec);
-            ret
-        }
+    fn take_cooked_parts(&mut self) -> (Bmp, Vec<T>) {
+        std::mem::take(self).into_cooked_parts()
     }
 
     /// Get a raw pointer to an element in the `BmpVec`
