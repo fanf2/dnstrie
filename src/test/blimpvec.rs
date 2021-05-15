@@ -20,6 +20,44 @@ impl<T> BlimpVec<T> {
         BlimpVec { len: 0, vec }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (u8, &T)> {
+        self.vec
+            .iter()
+            .enumerate()
+            .filter(|(_, elem)| elem.is_some())
+            .map(|(pos, elem)| (pos as u8, elem.as_ref().unwrap()))
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = u8> + '_ {
+        self.vec
+            .iter()
+            .enumerate()
+            .filter(|(_, elem)| elem.is_some())
+            .map(|(pos, _)| pos as u8)
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &T> {
+        self.vec
+            .iter()
+            .filter(|elem| elem.is_some())
+            .map(|elem| elem.as_ref().unwrap())
+    }
+
+    pub fn contains<N>(&self, pos: N) -> bool
+    where
+        N: TryInto<u8>,
+    {
+        self.get(pos).is_some()
+    }
+
     fn get_pos<N>(&self, pos: N) -> Option<usize>
     where
         N: TryInto<u8>,
@@ -45,21 +83,6 @@ impl<T> BlimpVec<T> {
             Some(pos) => self.vec[pos].as_mut(),
             _ => None,
         }
-    }
-
-    pub fn contains<N>(&self, pos: N) -> bool
-    where
-        N: TryInto<u8>,
-    {
-        self.get(pos).is_some()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    pub fn len(&self) -> usize {
-        self.len
     }
 
     pub fn insert<N>(&mut self, pos: N, val: T) -> Option<T>

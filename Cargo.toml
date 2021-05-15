@@ -13,4 +13,13 @@ opt-level = 2
 [profile.release]
 debug = true
 
-[dependencies]
+[dev-dependencies.fastrand]
+version = "*"
+
+[dependencies.fastrand]
+version = "*"
+optional = true
+
+[features]
+default = []
+test = ["fastrand"]
