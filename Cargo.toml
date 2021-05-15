@@ -20,6 +20,9 @@ version = "*"
 version = "*"
 optional = true
 
+[dependencies.thiserror]
+version = "*"
+
 [features]
 default = []
 test = ["fastrand"]
