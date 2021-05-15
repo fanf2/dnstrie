@@ -133,77 +133,41 @@ pub fn from_message(buf: &[u8], mut pos: usize) -> Result<MessageName> {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HeapName {
-    mem: Box<[u8]>,
-}
-
-impl<'n> From<WireName<'n>> for HeapName {
-    fn from(wire: WireName<'n>) -> HeapName {
-        let labs = wire.labs;
-        let len = wire.len;
-        let mut v = vec![0u8; 1 + labs + len];
-        v[0] = labs as u8;
-        v[1..=labs].copy_from_slice(&wire.lpos[0..labs]);
-        v[labs + 1..].copy_from_slice(wire.buf);
-        HeapName { mem: v.into_boxed_slice() }
-    }
-}
-
-impl<'n> From<MessageName<'n>> for HeapName {
-    fn from(msg: MessageName<'n>) -> HeapName {
-        let labs = msg.labs;
-        let len = msg.len;
-        let mut v = vec![0u8; 1 + labs + len];
-        v[0] = labs as u8;
-        for (lab, pos, label) in msg.label_iter() {
-            v[1 + lab] = pos as u8;
-            let start = 1 + labs + pos;
-            let end = start + label.len();
-            v[start..=end].copy_from_slice(label);
-        }
-        HeapName { mem: v.into_boxed_slice() }
-    }
-}
-
 /// A DNS name in wire format.
 ///
 /// This trait covers the methods that are common to [`HeapName`],
 /// [`MessageName`], and [`WireName`]
 ///
 pub trait DnsName<'n> {
+    /// The length of the name in uncompressed wire format
     fn namelen(self) -> usize;
+
+    /// The number of labels in the name
     fn labels(self) -> usize;
+
+    /// A slice covering a label's length byte and its text
+    ///
+    /// Returns `None` if the label number is out of range.
+    ///
     fn label(self, lab: usize) -> Option<&'n [u8]>;
+
+    /// Returns [`LabelIter`], an iterator visiting each label in a `DnsName`
     fn label_iter(self) -> LabelIter<'n, Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        LabelIter { name: self, lab: 0, pos: 0, _elem: PhantomData }
+    }
 }
 
+/// Helper function to get a slice covering a label
+///
+/// The slice covers both the length byte and the label text.
+///
 fn label_slice(buf: &[u8], start: usize) -> &[u8] {
     let len = buf[start] as usize;
     let end = start + len;
     &buf[start..=end]
-}
-
-impl<'n> DnsName<'n> for &'n HeapName {
-    fn labels(self) -> usize {
-        self.mem[0] as usize
-    }
-
-    fn namelen(self) -> usize {
-        self.mem.len() - self.labels() - 1
-    }
-
-    fn label(self, lab: usize) -> Option<&'n [u8]> {
-        let labs = Some(self.labels()).filter(|&labs| lab < labs)?;
-        let pos = self.mem[1 + lab] as usize;
-        Some(label_slice(&self.mem, 1 + labs + pos))
-    }
-
-    fn label_iter(self) -> LabelIter<'n, Self> {
-        LabelIter { name: self, lab: 0, pos: 0, _elem: PhantomData }
-    }
 }
 
 impl<'n, I> DnsName<'n> for &BorrowName<'n, I>
@@ -222,13 +186,15 @@ where
         let pos: usize = self.lpos.get(lab).copied()?.into();
         Some(label_slice(self.buf, pos))
     }
-
-    fn label_iter(self) -> LabelIter<'n, Self> {
-        LabelIter { name: self, lab: 0, pos: 0, _elem: PhantomData }
-    }
 }
 
 /// An iterator visiting each label in a DNS name
+///
+/// The iterator yeilds a tuple containing:
+///
+///   * the label number;
+///   * the position of the label in the name;
+///   * a slice covering the label length byte and the label text.
 ///
 /// Returned by [`DnsName::label_iter()`]
 ///
@@ -254,5 +220,70 @@ where
         } else {
             None
         }
+    }
+}
+
+/// A DNS name in wire format, owned and allocated on the heap.
+///
+/// A `HeapName` is intended to be reasonably efficient:
+///
+///   * it includes an index of the label positions, so it doesn't
+///     need to be re-parsed;
+///
+///   * the label index and name share a single allocation;
+///
+///   * TODO: it only uses a single word to refer to the allocation.
+///
+/// The maximum heap allocation is the maximum length of a DNS name
+/// (255 bytes) plus the maximum number of labels (128 bytes,
+/// including the root), plus a byte for the label count, totalling
+/// 384 bytes.
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HeapName {
+    mem: Box<[u8]>,
+}
+
+impl<'n> From<&WireName<'n>> for HeapName {
+    fn from(wire: &WireName<'n>) -> HeapName {
+        let labs = wire.labs;
+        let len = wire.len;
+        let mut v = vec![0u8; 1 + labs + len];
+        v[0] = labs as u8;
+        v[1..=labs].copy_from_slice(&wire.lpos[0..labs]);
+        v[labs + 1..].copy_from_slice(wire.buf);
+        HeapName { mem: v.into_boxed_slice() }
+    }
+}
+
+impl<'n> From<&MessageName<'n>> for HeapName {
+    fn from(msg: &MessageName<'n>) -> HeapName {
+        let labs = msg.labs;
+        let len = msg.len;
+        let mut v = vec![0u8; 1 + labs + len];
+        v[0] = labs as u8;
+        for (lab, pos, label) in msg.label_iter() {
+            v[1 + lab] = pos as u8;
+            let start = 1 + labs + pos;
+            let end = start + label.len();
+            v[start..=end].copy_from_slice(label);
+        }
+        HeapName { mem: v.into_boxed_slice() }
+    }
+}
+
+impl<'n> DnsName<'n> for &'n HeapName {
+    fn labels(self) -> usize {
+        self.mem[0] as usize
+    }
+
+    fn namelen(self) -> usize {
+        self.mem[self.labels()] as usize + 1
+    }
+
+    fn label(self, lab: usize) -> Option<&'n [u8]> {
+        let labs = Some(self.labels()).filter(|&labs| lab < labs)?;
+        let pos = self.mem[1 + lab] as usize;
+        Some(label_slice(&self.mem, 1 + labs + pos))
     }
 }
