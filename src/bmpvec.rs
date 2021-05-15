@@ -309,6 +309,10 @@ impl<'a, T> IntoIterator for &'a BmpVec<T> {
     }
 }
 
+/// An iterator visiting each element in a `BmpVec`.
+///
+/// Returned by [`BmpVec::iter()`]
+///
 pub struct Iter<'a, T> {
     vec: &'a BmpVec<T>,
     pos: bmp::Iter,
