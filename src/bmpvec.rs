@@ -517,3 +517,17 @@ mod bmp {
         }
     }
 }
+
+// most tests are in test::exercise
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn oob_panic() {
+        let mut bmp = BmpVec::new();
+        bmp.insert(64, "wat");
+    }
+}

@@ -1,7 +1,4 @@
-#![allow(dead_code)]
-
-mod bmpvec;
-mod dname;
+use dnstrie::dname;
 
 fn main() {
     for byte in 0..=255 {

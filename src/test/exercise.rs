@@ -17,7 +17,7 @@ pub fn bmpvec_blimpvec(data: &[u8]) {
             2 => {
                 assert_eq!(bmp.get(pos), blimp.get(pos));
             }
-            _ => match byte % 10 {
+            _ => match byte % 11 {
                 0 => assert_eq!(bmp.len(), blimp.len()),
                 1 => assert_eq!(bmp.is_empty(), blimp.is_empty()),
                 2 => assert_eq!(bmp.contains(pos), blimp.contains(pos)),
@@ -43,17 +43,22 @@ pub fn bmpvec_blimpvec(data: &[u8]) {
                     assert_eq!(bmp_values, blimp_values);
                 }
                 7 => {
-                    let from = BmpVec::from(&blimp);
-                    assert_eq!(from, bmp);
+                    let from_blimp = BmpVec::from(&blimp);
+                    assert_eq!(bmp, from_blimp);
                 }
                 8 => {
-                    let from = BlimpVec::from(&bmp);
-                    assert_eq!(from, blimp);
+                    let from_bmp = BlimpVec::from(&bmp);
+                    assert_eq!(from_bmp, blimp);
                 }
                 9 => {
                     let bmptxt = format!("{:?}", &bmp);
                     let blimptxt = format!("{:?}", &blimp);
                     assert_eq!(&bmptxt[3..], &blimptxt[5..]);
+                }
+                10 => {
+                    for pos in 0..=63 {
+                        assert_eq!(bmp.remove(pos), blimp.remove(pos));
+                    }
                 }
                 _ => panic!("inconcievable!"),
             },
