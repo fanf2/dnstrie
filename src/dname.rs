@@ -144,14 +144,12 @@ impl<'n> From<MessageName<'n>> for OwnedName {
         let len = msg.len;
         let mut v = vec![0u8; 1 + labs + len];
         v[0] = labs as u8;
-        let mut pos = 0;
-        for (lab, &from) in msg.lpos.iter().enumerate() {
+        for (lab, pos, label) in msg.label_iter() {
             v[1 + lab] = pos as u8;
-            let from = from as usize;
-            let len = msg.buf[from] as usize;
-            let into = 1 + labs + pos;
-            v[into..=into + len].copy_from_slice(&msg.buf[from..=from + len]);
-            pos += 1 + len;
+            let start = 1 + labs + pos + 1;
+            let end = start + label.len();
+            v[start - 1] = label.len() as u8;
+            v[start..end].copy_from_slice(label);
         }
         OwnedName { mem: v.into_boxed_slice() }
     }
@@ -161,6 +159,10 @@ pub trait DnsName<'n> {
     fn namelen(self) -> usize;
     fn labels(self) -> usize;
     fn label(self, lab: usize) -> Option<&'n [u8]>;
+
+    fn label_iter(self) -> LabelIter<'n, Self>
+    where
+        Self: Sized;
 }
 
 impl<'n> DnsName<'n> for &'n OwnedName {
@@ -183,6 +185,9 @@ impl<'n> DnsName<'n> for &'n OwnedName {
         } else {
             None
         }
+    }
+    fn label_iter(self) -> LabelIter<'n, Self> {
+        LabelIter { name: self, lab: 0, pos: 0, _elem: PhantomData }
     }
 }
 
@@ -209,16 +214,19 @@ where
             None
         }
     }
+    fn label_iter(self) -> LabelIter<'n, Self> {
+        LabelIter { name: self, lab: 0, pos: 0, _elem: PhantomData }
+    }
 }
 
-struct Iter<'n, N> {
+pub struct LabelIter<'n, N> {
     name: N,
     lab: usize,
     pos: usize,
     _elem: PhantomData<&'n [u8]>,
 }
 
-impl<'n, N> Iterator for Iter<'n, N>
+impl<'n, N> Iterator for LabelIter<'n, N>
 where
     N: DnsName<'n> + Copy,
 {
