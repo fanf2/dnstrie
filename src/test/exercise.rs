@@ -51,8 +51,9 @@ pub fn bmpvec_blimpvec(data: &[u8]) {
                     assert_eq!(from, blimp);
                 }
                 9 => {
-                    eprintln!("{:?}", &bmp);
-                    eprintln!("{:?}", &blimp);
+                    let bmptxt = format!("{:?}", &bmp);
+                    let blimptxt = format!("{:?}", &blimp);
+                    assert_eq!(&bmptxt[3..], &blimptxt[5..]);
                 }
                 _ => panic!("inconcievable!"),
             },
