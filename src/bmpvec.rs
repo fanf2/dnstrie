@@ -265,9 +265,11 @@ impl<T> BmpVec<T> {
     /// `BmpVec`.
     ///
     fn into_cooked_parts(self) -> (Bmp, Vec<T>) {
-        let len = self.len();
+        let (bmp, len) = (self.bmp, self.len());
         // SAFETY: we guarantee that our length matches the allocation
-        (self.bmp, unsafe { Vec::from_raw_parts(self.ptr, len, len) })
+        let vec = unsafe { Vec::from_raw_parts(self.ptr, len, len) };
+        std::mem::forget(self); // avoid double free
+        (bmp, vec)
     }
 
     /// Turn a `BmpVec` into a paor of a bitmap and vector.
