@@ -43,34 +43,55 @@ pub type WireName<'n> = BorrowName<'n, u8>;
 ///
 pub type MessageName<'n> = BorrowName<'n, u16>;
 
+impl<'n, I> BorrowName<'n, I>
+where
+    I: Copy + Default,
+{
+    fn new(buf: &'n [u8]) -> Self {
+        let o = Default::default();
+        BorrowName { buf, len: 0, labs: 0, lpos: [o; MAX_LABEL] }
+    }
+
+    fn get_llen(&self, pos: usize) -> Result<u8> {
+        match *self.buf.get(pos).ok_or(NameTruncated)? {
+            byte @ 0x00..=0x3F => Ok(byte),
+            byte @ 0x40..=0xBF => Err(LabelType(byte)),
+            byte @ 0xC0..=0xFF => Ok(byte),
+        }
+    }
+
+    fn push_label(&mut self, lpos: I, llen: u8) -> Result<()> {
+        self.lpos[self.labs] = lpos;
+        self.labs += 1;
+        self.len += 1 + llen as usize;
+        if self.labs >= MAX_LABEL {
+            return Err(NameLabels);
+        }
+        if self.len >= MAX_OCTET {
+            return Err(NameLength);
+        }
+        Ok(())
+    }
+}
+
 /// Parse a DNS name in uncompressed wire format.
 ///
 /// The resulting `WireName` borrows the `label` and `octet` arguments.
 ///
 pub fn from_wire(buf: &[u8]) -> Result<WireName> {
-    let mut lpos = [0; MAX_LABEL];
+    let mut name = WireName::new(buf);
     let mut pos = 0;
-    let mut lab = 0;
     loop {
-        let llen = match buf.get(pos) {
-            Some(0) => break, // root
-            Some(&byte @ 1..=0x3F) => byte,
-            Some(&byte @ 0x40..=0xBF) => return Err(LabelType(byte)),
-            Some(0xC0..=0xFF) => return Err(CompressBan),
-            None => return Err(NameTruncated),
-        };
-        lpos[lab] = pos.try_into()?;
-        lab += 1;
-        if lab >= MAX_LABEL {
-            return Err(NameLabels);
+        let llen = name.get_llen(pos)?;
+        if let 0xC0..=0xFF = llen {
+            return Err(CompressBan);
+        }
+        name.push_label(pos.try_into()?, llen)?;
+        if llen == 0 {
+            return Ok(name);
         }
         pos += 1 + llen as usize;
-        if pos >= MAX_OCTET {
-            return Err(NameLength);
-        }
     }
-    lpos[lab] = pos.try_into()?;
-    Ok(WireName { buf: &buf[0..=pos], len: pos + 1, labs: lab, lpos })
 }
 
 /// Parse a DNS name in compressed wire format.
@@ -81,44 +102,32 @@ pub fn from_wire(buf: &[u8]) -> Result<WireName> {
 /// arguments.
 ///
 pub fn from_message(buf: &[u8], mut pos: usize) -> Result<MessageName> {
-    let mut lpos = [0; MAX_LABEL];
+    let mut name = MessageName::new(buf);
     let mut hwm = pos;
-    let mut lab = 0;
-    let mut len = 0;
     loop {
-        let lablen = match buf.get(pos) {
-            Some(0) => break, // root
-            Some(&byte @ 1..=0x3F) => byte,
-            Some(&byte @ 0x40..=0xBF) => return Err(LabelType(byte)),
-            Some(&hi @ 0xC0..=0xFF) => match buf.get(pos + 1) {
-                Some(&lo) => {
-                    pos = (hi as usize & 0x3F) << 8 | lo as usize;
-                    if pos >= hwm {
-                        return Err(CompressWild);
-                    }
-                    hwm = pos;
-                    if let Some(0xC0..=0xFF) = buf.get(pos) {
-                        return Err(CompressChain);
-                    }
-                    continue;
-                }
-                None => return Err(NameTruncated),
-            },
-            None => return Err(NameTruncated),
-        };
-        lpos[lab] = pos.try_into()?;
-        lab += 1;
-        if lab >= MAX_LABEL {
-            return Err(NameLabels);
+        let llen = name.get_llen(pos)?;
+        if let hi @ 0xC0..=0xFF = llen {
+            let lo = *buf.get(pos + 1).ok_or(NameTruncated)?;
+            pos = (hi as usize & 0x3F) << 8 | lo as usize;
+            if pos >= hwm {
+                return Err(CompressWild);
+            }
+            hwm = pos;
+            if let Some(0xC0..=0xFF) = buf.get(pos) {
+                return Err(CompressChain);
+            }
+            continue;
         }
-        pos += 1 + lablen as usize;
-        len += 1 + lablen as usize;
-        if len >= MAX_OCTET {
-            return Err(NameLength);
+        name.push_label(pos.try_into()?, llen)?;
+        if llen == 0 {
+            return Ok(name);
         }
+        pos += 1 + llen as usize;
     }
-    lpos[lab] = pos.try_into()?;
-    Ok(MessageName { len: len + 1, labs: lab, buf, lpos })
+}
+
+pub struct Label<'n> {
+    buf: &'n [u8],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
