@@ -12,19 +12,19 @@ pub const MAX_OCTET: usize = 255;
 ///
 pub const MAX_LABEL: usize = (MAX_OCTET - 1) / 2 + 1;
 
-/// Number of entries in a [`LabelIndex`]
-///
-pub const LABEL_INDICES: usize = MAX_LABEL + 1;
-
-/// A slice containing the positions of a DNS name's labels
-///
-/// The first element is the actual number of labels, so that we can
-/// create a fixed-size array before we parse the name.
+/// An array which can hold the positions of a DNS name's labels
 ///
 /// This is a generic type so that variants can be used by
 /// [`WireName`] and [`MessageName`].
 ///
-pub type LabelIndex<I> = [I; LABEL_INDICES];
+pub type LabelBuf<'i, I> = &'i mut [I; MAX_LABEL];
+
+/// A slice holding the positions of a DNS name's labels
+///
+/// This is a generic type so that variants can be used by
+/// [`WireName`] and [`MessageName`].
+///
+pub type LabelIndex<'i, I> = &'i [I];
 
 /// A DNS name that borrows a [`LabelIndex`] and the name itself.
 ///
@@ -32,7 +32,7 @@ pub type LabelIndex<I> = [I; LABEL_INDICES];
 /// allocating ot copying.
 ///
 pub struct BorrowName<'i, 'n, I> {
-    label: &'i LabelIndex<I>,
+    label: LabelIndex<'i, I>,
     octet: &'n [u8],
 }
 
@@ -50,31 +50,86 @@ pub type WireName<'i, 'n> = BorrowName<'i, 'n, u8>;
 ///
 pub type MessageName<'i, 'n> = BorrowName<'i, 'n, u16>;
 
+/// Parse a DNS name in uncompressed wire format.
+///
+/// The resulting `WireName` borrows the `label` and `octet` arguments.
+///
 pub fn from_wire<'i, 'n>(
-    label: &'i mut LabelIndex<u8>,
+    label: LabelBuf<'i, u8>,
     octet: &'n [u8],
 ) -> Result<WireName<'i, 'n>> {
     let mut pos = 0;
-    let mut lab = 1;
+    let mut lab = 0;
     loop {
         let lablen = match octet.get(pos) {
             Some(0) => break, // root
-            Some(byte @ 1..=0x3F) => *byte,
-            Some(byte @ 0x40..=0xBF) => return Err(LabelType(*byte)),
-            Some(0xC0..=0xFF) => return Err(Compression),
-            None => return Err(NameFormat("truncated")),
+            Some(&byte @ 1..=0x3F) => byte,
+            Some(&byte @ 0x40..=0xBF) => return Err(LabelType(byte)),
+            Some(0xC0..=0xFF) => return Err(CompressBan),
+            None => return Err(NameTruncated),
         };
         label[lab] = pos.try_into()?;
         lab += 1;
-        if lab >= LABEL_INDICES {
-            return Err(NameFormat("too many labels"));
+        if lab >= MAX_LABEL {
+            return Err(NameLabels);
         }
         pos += 1 + lablen as usize;
         if pos >= MAX_OCTET {
-            return Err(NameFormat("too long"));
+            return Err(NameLength);
         }
     }
     label[lab] = pos.try_into()?;
-    label[0] = lab.try_into()?;
-    Ok(WireName { label, octet: &octet[0..=pos] })
+    Ok(WireName { label: &label[0..=lab], octet: &octet[0..=pos] })
+}
+
+/// Parse a DNS name in compressed wire format.
+///
+/// The name starts at the given `pos` in the `msg`.
+///
+/// The resulting `MessageName` borrows the `label` and `msg`
+/// arguments.
+///
+pub fn from_message<'i, 'n>(
+    label: LabelBuf<'i, u16>,
+    msg: &'n [u8],
+    mut pos: usize,
+) -> Result<MessageName<'i, 'n>> {
+    let mut hwm = pos;
+    let mut lab = 0;
+    loop {
+        let lablen = match msg.get(pos) {
+            Some(0) => break, // root
+            Some(&byte @ 1..=0x3F) => byte,
+            Some(&byte @ 0x40..=0xBF) => return Err(LabelType(byte)),
+            Some(&hi @ 0xC0..=0xFF) => match msg.get(pos + 1) {
+                Some(&lo) => {
+                    let hi = hi as usize;
+                    let lo = lo as usize;
+                    pos = (hi & 0x3F) << 8 | lo;
+                    if pos < hwm {
+                        hwm = pos;
+                    } else {
+                        return Err(CompressWild);
+                    }
+                    if let Some(0xC0..=0xFF) = msg.get(pos) {
+                        return Err(CompressChain);
+                    }
+                    continue;
+                }
+                None => return Err(NameTruncated),
+            },
+            None => return Err(NameTruncated),
+        };
+        label[lab] = pos.try_into()?;
+        lab += 1;
+        if lab >= MAX_LABEL {
+            return Err(NameLabels);
+        }
+        pos += 1 + lablen as usize;
+        if pos >= MAX_OCTET {
+            return Err(NameLength);
+        }
+    }
+    label[lab] = pos.try_into()?;
+    Ok(MessageName { label: &label[0..=lab], octet: msg })
 }
