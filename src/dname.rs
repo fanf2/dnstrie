@@ -57,17 +57,18 @@ where
 
     /// Add a label to the name, located in the `buf` at the given
     /// position with the given length.
-    fn push_label(&mut self, lpos: I, llen: u8) -> Result<()> {
+    fn push_label(&mut self, lpos: I, llen: u8) -> Result<usize> {
+        let step = 1 + llen as usize;
         self.lpos[self.labs] = lpos;
         self.labs += 1;
-        self.len += 1 + llen as usize;
+        self.len += step;
         if self.labs >= MAX_LABEL {
             return Err(NameLabels);
         }
         if self.len >= MAX_OCTET {
             return Err(NameLength);
         }
-        Ok(())
+        Ok(step)
     }
 
     /// Get the label length byte at the given position, and do some
@@ -93,12 +94,11 @@ pub fn from_wire(buf: &[u8]) -> Result<WireName> {
         if let 0xC0..=0xFF = llen {
             return Err(CompressBan);
         }
-        name.push_label(pos.try_into()?, llen)?;
+        pos += name.push_label(pos.try_into()?, llen)?;
         if llen == 0 {
             name.buf = &buf[0..name.len];
             return Ok(name);
         }
-        pos += 1 + llen as usize;
     }
 }
 
@@ -126,11 +126,10 @@ pub fn from_message(buf: &[u8], mut pos: usize) -> Result<MessageName> {
             }
             continue;
         }
-        name.push_label(pos.try_into()?, llen)?;
+        pos += name.push_label(pos.try_into()?, llen)?;
         if llen == 0 {
             return Ok(name);
         }
-        pos += 1 + llen as usize;
     }
 }
 
