@@ -6,6 +6,7 @@
 
 use std::convert::TryInto;
 
+#[derive(PartialEq)]
 pub struct BlimpVec<T> {
     len: usize,
     vec: Vec<Option<T>>,
@@ -115,5 +116,50 @@ impl<T> BlimpVec<T> {
             _ => (),
         }
         old
+    }
+}
+
+impl<T> std::fmt::Debug for BlimpVec<T>
+where
+    T: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_empty() {
+            write!(f, "BlimpVec {{}}")
+        } else {
+            writeln!(f, "BlimpVec {{")?;
+            for (pos, val) in self.iter() {
+                writeln!(f, "{:4} = {:?},", pos, val)?;
+            }
+            write!(f, "}}")
+        }
+    }
+}
+
+use crate::bmpvec::*;
+
+impl<T> From<&BlimpVec<T>> for BmpVec<T>
+where
+    T: Copy,
+{
+    fn from(blimp: &BlimpVec<T>) -> BmpVec<T> {
+        let mut bmp = BmpVec::new();
+        for (pos, val) in blimp.iter() {
+            bmp.insert(pos, *val);
+        }
+        bmp
+    }
+}
+
+impl<T> From<&BmpVec<T>> for BlimpVec<T>
+where
+    T: Copy,
+{
+    fn from(bmp: &BmpVec<T>) -> BlimpVec<T> {
+        let mut blimp = BlimpVec::new();
+        for (pos, val) in bmp.iter() {
+            blimp.insert(pos, *val);
+        }
+        blimp
     }
 }

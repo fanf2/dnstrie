@@ -230,6 +230,14 @@ impl<T> BmpVec<T> {
         (self.bmp.into_raw_parts(), self.ptr)
     }
 
+    /// Expand a `BmpVec` into a bitmap and a slice of elements
+    ///
+    fn borrow_cooked_parts(&self) -> (Bmp, &[T]) {
+        let len = self.len();
+        // SAFETY: we guarantee that our length matches the allocation
+        (self.bmp, unsafe { std::slice::from_raw_parts(self.ptr, len) })
+    }
+
     /// Construct a `BmpVec` from a pair of a bitmap and vector.
     ///
     /// The vector is consumed.
@@ -249,14 +257,6 @@ impl<T> BmpVec<T> {
         let slice = Box::into_raw(shrunk);
         let ptr = slice as *mut T;
         BmpVec { bmp, ptr, _marker: PhantomData }
-    }
-
-    /// Expand a `BmpVec` into a bitmap and a slice of elements
-    ///
-    fn borrow_cooked_parts(&self) -> (Bmp, &[T]) {
-        let len = self.len();
-        // SAFETY: we guarantee that our length matches the allocation
-        (self.bmp, unsafe { std::slice::from_raw_parts(self.ptr, len) })
     }
 
     /// Consume a `BmpVec` and expand it into a pair of a bitmap and vector.
@@ -321,6 +321,34 @@ impl<'a, T> Iterator for Iter<'a, T> {
     }
 }
 
+impl<T> std::cmp::PartialEq for BmpVec<T>
+where
+    T: std::cmp::PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        let (this_bmp, this_slice) = self.borrow_cooked_parts();
+        let (that_bmp, that_slice) = other.borrow_cooked_parts();
+        this_bmp == that_bmp && this_slice == that_slice
+    }
+}
+
+impl<T> std::fmt::Debug for BmpVec<T>
+where
+    T: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_empty() {
+            write!(f, "BmpVec {{}}")
+        } else {
+            writeln!(f, "BmpVec {{")?;
+            for (pos, val) in self {
+                writeln!(f, "{:4} = {:?},", pos, val)?;
+            }
+            write!(f, "}}")
+        }
+    }
+}
+
 /// 64-bit bitmaps
 /// ==============
 ///
@@ -343,21 +371,21 @@ mod bmp {
     /// A bitmap to identify which elements are present in a
     /// [`BmpVec`][super::BmpVec]
     ///
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Eq, PartialEq)]
     pub struct Bmp(u64);
 
     /// exactly one bit set to identify a particular element
     ///
     /// constructed by [`bitmask()`]
     ///
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Eq, PartialEq)]
     pub struct Bit(u64);
 
     /// all the bits less than the accompanying [`Bit`]
     ///
     /// constructed by [`bitmask()`]
     ///
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Eq, PartialEq)]
     pub struct Mask(u64);
 
     /// Get the [`Bit`] at a given `pos`ition, and a [`Mask`] covering the
@@ -468,6 +496,24 @@ mod bmp {
         type IntoIter = Iter;
         fn into_iter(self) -> Iter {
             Iter { bmp: self, pos: 0 }
+        }
+    }
+
+    impl std::fmt::Debug for Bmp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Bmp({:064b})", self.0)
+        }
+    }
+
+    impl std::fmt::Debug for Bit {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Bit({})", self.0.trailing_zeros())
+        }
+    }
+
+    impl std::fmt::Debug for Mask {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Mask({})", self.0.trailing_ones())
         }
     }
 }
