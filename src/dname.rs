@@ -103,14 +103,11 @@ pub fn from_message<'i, 'n>(
             Some(&byte @ 0x40..=0xBF) => return Err(LabelType(byte)),
             Some(&hi @ 0xC0..=0xFF) => match msg.get(pos + 1) {
                 Some(&lo) => {
-                    let hi = hi as usize;
-                    let lo = lo as usize;
-                    pos = (hi & 0x3F) << 8 | lo;
-                    if pos < hwm {
-                        hwm = pos;
-                    } else {
+                    pos = (hi as usize & 0x3F) << 8 | lo as usize;
+                    if pos >= hwm {
                         return Err(CompressWild);
                     }
+                    hwm = pos;
                     if let Some(0xC0..=0xFF) = msg.get(pos) {
                         return Err(CompressChain);
                     }
