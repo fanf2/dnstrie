@@ -31,6 +31,7 @@ pub type LabelIndex<'i, I> = &'i [I];
 /// This allows a DNS name to be parsed from the wire without
 /// allocating ot copying.
 ///
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BorrowName<'i, 'n, I> {
     label: LabelIndex<'i, I>,
     octet: &'n [u8],
@@ -129,4 +130,75 @@ pub fn from_message<'i, 'n>(
     }
     label[lab] = pos.try_into()?;
     Ok(MessageName { label: &label[0..=lab], octet: msg })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OwnedName {
+    mem: Box<[u8]>,
+}
+
+impl OwnedName {
+    fn borrow(&self) -> WireName<'_, '_> {
+        let labs = self.labels();
+        let label = &self.mem[1..=labs];
+        let octet = &self.mem[labs + 1..];
+        WireName { label, octet }
+    }
+}
+
+impl<'i, 'n> From<WireName<'i, 'n>> for OwnedName {
+    fn from(wire: WireName<'i, 'n>) -> OwnedName {
+        let lab = wire.label.len();
+        let len = wire.octet.len();
+        let mut v = Vec::with_capacity(1 + lab + len);
+        v[0] = lab as u8;
+        v[1..=lab].copy_from_slice(wire.label);
+        v[lab + 1..=lab + len].copy_from_slice(wire.octet);
+        OwnedName { mem: v.into_boxed_slice() }
+    }
+}
+
+pub trait DnsName {
+    fn labels(&self) -> usize;
+    fn label(&self, lab: usize) -> Option<&[u8]>;
+}
+
+impl DnsName for OwnedName {
+    fn labels(&self) -> usize {
+        self.mem[0] as usize
+    }
+
+    fn label(&self, lab: usize) -> Option<&[u8]> {
+        let labs = self.labels();
+        if lab < labs {
+            let pos = self.mem[1 + lab] as usize;
+            let start = pos + 1 + labs;
+            let len = self.mem[start - 1] as usize;
+            let end = start + len;
+            Some(&self.mem[start..end])
+        } else {
+            None
+        }
+    }
+}
+
+impl<'i, 'n, I> DnsName for BorrowName<'i, 'n, I>
+where
+    I: Into<usize> + Copy,
+{
+    fn labels(&self) -> usize {
+        self.label.len()
+    }
+
+    fn label(&self, lab: usize) -> Option<&'n [u8]> {
+        if lab < self.labels() {
+            let pos: usize = self.label[lab].into();
+            let start = pos + 1;
+            let len = self.octet[start - 1] as usize;
+            let end = start + len;
+            Some(&self.octet[start..end])
+        } else {
+            None
+        }
+    }
 }
