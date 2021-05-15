@@ -47,19 +47,14 @@ impl<'n, I> BorrowName<'n, I>
 where
     I: Copy + Default,
 {
+    /// Construct an empty name onto which we will [`push_label()`]
     fn new(buf: &'n [u8]) -> Self {
         let o = Default::default();
         BorrowName { buf, len: 0, labs: 0, lpos: [o; MAX_LABEL] }
     }
 
-    fn get_llen(&self, pos: usize) -> Result<u8> {
-        match *self.buf.get(pos).ok_or(NameTruncated)? {
-            byte @ 0x00..=0x3F => Ok(byte),
-            byte @ 0x40..=0xBF => Err(LabelType(byte)),
-            byte @ 0xC0..=0xFF => Ok(byte),
-        }
-    }
-
+    /// Add a label to the name, located in the `buf` at the given
+    /// position with the given length.
     fn push_label(&mut self, lpos: I, llen: u8) -> Result<()> {
         self.lpos[self.labs] = lpos;
         self.labs += 1;
@@ -71,6 +66,16 @@ where
             return Err(NameLength);
         }
         Ok(())
+    }
+
+    /// Get the label length byte at the given position, and do some
+    /// basic checking.
+    fn get_llen(&self, pos: usize) -> Result<u8> {
+        match *self.buf.get(pos).ok_or(NameTruncated)? {
+            byte @ 0x00..=0x3F => Ok(byte),
+            byte @ 0x40..=0xBF => Err(LabelType(byte)),
+            byte @ 0xC0..=0xFF => Ok(byte),
+        }
     }
 }
 
@@ -88,6 +93,7 @@ pub fn from_wire(buf: &[u8]) -> Result<WireName> {
         }
         name.push_label(pos.try_into()?, llen)?;
         if llen == 0 {
+            name.buf = &buf[0..name.len];
             return Ok(name);
         }
         pos += 1 + llen as usize;
@@ -126,10 +132,6 @@ pub fn from_message(buf: &[u8], mut pos: usize) -> Result<MessageName> {
     }
 }
 
-pub struct Label<'n> {
-    buf: &'n [u8],
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OwnedName {
     mem: Box<[u8]>,
@@ -155,10 +157,9 @@ impl<'n> From<MessageName<'n>> for OwnedName {
         v[0] = labs as u8;
         for (lab, pos, label) in msg.label_iter() {
             v[1 + lab] = pos as u8;
-            let start = 1 + labs + pos + 1;
+            let start = 1 + labs + pos;
             let end = start + label.len();
-            v[start - 1] = label.len() as u8;
-            v[start..end].copy_from_slice(label);
+            v[start..=end].copy_from_slice(label);
         }
         OwnedName { mem: v.into_boxed_slice() }
     }
@@ -168,10 +169,15 @@ pub trait DnsName<'n> {
     fn namelen(self) -> usize;
     fn labels(self) -> usize;
     fn label(self, lab: usize) -> Option<&'n [u8]>;
-
     fn label_iter(self) -> LabelIter<'n, Self>
     where
         Self: Sized;
+}
+
+fn label_slice(buf: &[u8], start: usize) -> &[u8] {
+    let len = buf[start] as usize;
+    let end = start + len;
+    &buf[start..=end]
 }
 
 impl<'n> DnsName<'n> for &'n OwnedName {
@@ -184,17 +190,11 @@ impl<'n> DnsName<'n> for &'n OwnedName {
     }
 
     fn label(self, lab: usize) -> Option<&'n [u8]> {
-        let labs = self.labels();
-        if lab < labs {
-            let pos = self.mem[1 + lab] as usize;
-            let start = 1 + labs + pos + 1;
-            let len = self.mem[start - 1] as usize;
-            let end = start + len;
-            Some(&self.mem[start..end])
-        } else {
-            None
-        }
+        let labs = Some(self.labels()).filter(|&labs| lab < labs)?;
+        let pos = self.mem[1 + lab] as usize;
+        Some(label_slice(&self.mem, 1 + labs + pos))
     }
+
     fn label_iter(self) -> LabelIter<'n, Self> {
         LabelIter { name: self, lab: 0, pos: 0, _elem: PhantomData }
     }
@@ -213,16 +213,10 @@ where
     }
 
     fn label(self, lab: usize) -> Option<&'n [u8]> {
-        if lab < self.labels() {
-            let pos: usize = self.lpos[lab].into();
-            let start = pos + 1;
-            let len = self.buf[start - 1] as usize;
-            let end = start + len;
-            Some(&self.buf[start..end])
-        } else {
-            None
-        }
+        let pos: usize = self.lpos.get(lab).copied()?.into();
+        Some(label_slice(self.buf, pos))
     }
+
     fn label_iter(self) -> LabelIter<'n, Self> {
         LabelIter { name: self, lab: 0, pos: 0, _elem: PhantomData }
     }
@@ -241,12 +235,11 @@ where
 {
     type Item = (usize, usize, &'n [u8]);
     fn next(&mut self) -> Option<(usize, usize, &'n [u8])> {
-        if self.lab < self.name.labels() {
+        if let Some(label) = self.name.label(self.lab) {
             let lab = self.lab;
             let pos = self.pos;
-            let label = self.name.label(lab).unwrap();
             self.lab += 1;
-            self.pos += 1 + label.len();
+            self.pos += label.len();
             Some((lab, pos, label))
         } else {
             None
