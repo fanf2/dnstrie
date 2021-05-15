@@ -1,8 +1,7 @@
-use dnstrie::dname;
+use dnstrie::trieprep::BYTE_TO_BITS;
 
 fn main() {
-    for byte in 0..=255 {
-        let bits = dname::BYTE_TO_BITS[byte];
+    for (byte, &bits) in BYTE_TO_BITS.iter().enumerate() {
         if bits < 256 {
             print!("  {:02x}", bits);
         } else {
