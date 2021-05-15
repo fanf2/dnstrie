@@ -13,6 +13,8 @@ pub const MAX_OCTET: usize = 255;
 ///
 pub const MAX_LABEL: usize = (MAX_OCTET - 1) / 2 + 1;
 
+/// A buffer for collecting label positions when parsnig a DNS name.
+///
 type LabelPos<I> = [I; MAX_LABEL];
 
 /// A DNS name that borrows the buffer it was parsed from.
@@ -133,24 +135,24 @@ pub fn from_message(buf: &[u8], mut pos: usize) -> Result<MessageName> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct OwnedName {
+pub struct HeapName {
     mem: Box<[u8]>,
 }
 
-impl<'n> From<WireName<'n>> for OwnedName {
-    fn from(wire: WireName<'n>) -> OwnedName {
+impl<'n> From<WireName<'n>> for HeapName {
+    fn from(wire: WireName<'n>) -> HeapName {
         let labs = wire.labs;
         let len = wire.len;
         let mut v = vec![0u8; 1 + labs + len];
         v[0] = labs as u8;
         v[1..=labs].copy_from_slice(&wire.lpos[0..labs]);
         v[labs + 1..].copy_from_slice(wire.buf);
-        OwnedName { mem: v.into_boxed_slice() }
+        HeapName { mem: v.into_boxed_slice() }
     }
 }
 
-impl<'n> From<MessageName<'n>> for OwnedName {
-    fn from(msg: MessageName<'n>) -> OwnedName {
+impl<'n> From<MessageName<'n>> for HeapName {
+    fn from(msg: MessageName<'n>) -> HeapName {
         let labs = msg.labs;
         let len = msg.len;
         let mut v = vec![0u8; 1 + labs + len];
@@ -161,10 +163,15 @@ impl<'n> From<MessageName<'n>> for OwnedName {
             let end = start + label.len();
             v[start..=end].copy_from_slice(label);
         }
-        OwnedName { mem: v.into_boxed_slice() }
+        HeapName { mem: v.into_boxed_slice() }
     }
 }
 
+/// A DNS name in wire format.
+///
+/// This trait covers the methods that are common to [`HeapName`],
+/// [`MessageName`], and [`WireName`]
+///
 pub trait DnsName<'n> {
     fn namelen(self) -> usize;
     fn labels(self) -> usize;
@@ -180,7 +187,7 @@ fn label_slice(buf: &[u8], start: usize) -> &[u8] {
     &buf[start..=end]
 }
 
-impl<'n> DnsName<'n> for &'n OwnedName {
+impl<'n> DnsName<'n> for &'n HeapName {
     fn labels(self) -> usize {
         self.mem[0] as usize
     }
@@ -222,6 +229,10 @@ where
     }
 }
 
+/// An iterator visiting each label in a DNS name
+///
+/// Returned by [`DnsName::label_iter()`]
+///
 pub struct LabelIter<'n, N> {
     name: N,
     lab: usize,
