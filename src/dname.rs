@@ -1,6 +1,6 @@
 use crate::error::Error::*;
 use crate::error::*;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::marker::PhantomData;
 
 /// Maximum length of a DNS name, in octets on the wire.
@@ -158,6 +158,56 @@ pub trait DnsName<'n> {
     {
         LabelIter { name: self, lab: 0, pos: 0, _elem: PhantomData }
     }
+
+    fn to_text(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    where
+        Self: Sized + Copy,
+    {
+        if self.labels() == 1 {
+            write!(f, ".")
+        } else {
+            for (lab, _, label) in self.label_iter() {
+                write_text(f, &label[1..])?;
+                // only print the root if this name is the root
+                if lab == 0 || label.len() > 1 {
+                    write!(f, ".")?;
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+fn write_text(
+    f: &mut std::fmt::Formatter<'_>,
+    bytes: &[u8],
+) -> std::fmt::Result {
+    for &byte in bytes.iter() {
+        match byte {
+            b'*' | b'-' | b'_' | // permitted punctuation
+            b'0'..=b'9' |
+            b'A'..=b'Z' |
+            b'a'..=b'z' => write!(f, "{}", byte as char)?,
+            b'!'..=b'~' => write!(f, "\\{}", byte as char)?,
+            _ => write!(f, "\\{:03}", byte)?,
+        }
+    }
+    Ok(())
+}
+
+impl<'n, I> std::fmt::Display for BorrowName<'n, I>
+where
+    I: Into<usize> + Copy,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_text(f)
+    }
+}
+
+impl std::fmt::Display for HeapName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_text(f)
+    }
 }
 
 /// Helper function to get a slice covering a label
@@ -244,6 +294,22 @@ pub struct HeapName {
     mem: Box<[u8]>,
 }
 
+impl<'n> DnsName<'n> for &'n HeapName {
+    fn labels(self) -> usize {
+        self.mem[0] as usize
+    }
+
+    fn namelen(self) -> usize {
+        self.mem[self.labels()] as usize + 1
+    }
+
+    fn label(self, lab: usize) -> Option<&'n [u8]> {
+        let labs = Some(self.labels()).filter(|&labs| lab < labs)?;
+        let pos = self.mem[1 + lab] as usize;
+        Some(label_slice(&self.mem, 1 + labs + pos))
+    }
+}
+
 impl<'n> From<&WireName<'n>> for HeapName {
     fn from(wire: &WireName<'n>) -> HeapName {
         let labs = wire.labs;
@@ -272,18 +338,49 @@ impl<'n> From<&MessageName<'n>> for HeapName {
     }
 }
 
-impl<'n> DnsName<'n> for &'n HeapName {
-    fn labels(self) -> usize {
-        self.mem[0] as usize
-    }
-
-    fn namelen(self) -> usize {
-        self.mem[self.labels()] as usize + 1
-    }
-
-    fn label(self, lab: usize) -> Option<&'n [u8]> {
-        let labs = Some(self.labels()).filter(|&labs| lab < labs)?;
-        let pos = self.mem[1 + lab] as usize;
-        Some(label_slice(&self.mem, 1 + labs + pos))
+impl TryFrom<&str> for HeapName {
+    type Error = Error;
+    fn try_from(text: &str) -> Result<HeapName> {
+        let mut v = Vec::new();
+        fn label(v: &mut Vec<u8>, pos: usize) -> Result<usize> {
+            if let len @ 0..=0x3F = v.len() - pos {
+                v[pos] = len as u8;
+                v.push(0);
+                Ok(v.len() - 1)
+            } else {
+                Err(LabelLength)
+            }
+        }
+        let mut pos = label(&mut v, 0)?;
+        let mut it = text.as_bytes().iter().peekable();
+        while let Some(&byte) = it.next() {
+            match byte {
+                b'\n' | b'\r' | b'\t' | b' ' => break,
+                b'.' => pos = label(&mut v, pos)?,
+                b'\\' => match it.next() {
+                    Some(&digit @ b'0'..=b'9') => {
+                        let mut n = (digit - b'0') as u16;
+                        if let Some(&&digit @ b'0'..=b'9') = it.peek() {
+                            n = n * 10 + (digit - b'0') as u16;
+                            it.next();
+                        }
+                        if let Some(&&digit @ b'0'..=b'9') = it.peek() {
+                            n = n * 10 + (digit - b'0') as u16;
+                            it.next();
+                        }
+                        let byte = u8::try_from(n)?;
+                        v.push(byte);
+                    }
+                    Some(&byte) => v.push(byte),
+                    None => return Err(NameTruncated),
+                },
+                b'"' => return Err(NameQuotes),
+                _ => v.push(byte),
+            }
+        }
+        if pos < v.len() - 1 {
+            label(&mut v, pos)?;
+        }
+        Ok(HeapName::from(&from_wire(&v[..])?))
     }
 }
