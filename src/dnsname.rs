@@ -355,8 +355,12 @@ impl TryFrom<&str> for HeapName {
         let mut it = text.as_bytes().iter().peekable();
         while let Some(&byte) = it.next() {
             match byte {
-                b'\n' | b'\r' | b'\t' | b' ' => break,
-                b'.' => pos = label(&mut v, pos)?,
+                // RFC 1035 zone file special characters
+                b'\n' | b'\r' | b'\t' | b' ' | b';' | b'(' | b')' => break,
+                // RFC 1035 suggests that a label can be a quoted
+                // string; seems better to treat that as an error
+                b'"' => return Err(NameQuotes),
+                // RFC 1035 peculiar decimal escapes
                 b'\\' => match it.next() {
                     Some(&digit @ b'0'..=b'9') => {
                         let mut n = (digit - b'0') as u16;
@@ -374,7 +378,11 @@ impl TryFrom<&str> for HeapName {
                     Some(&byte) => v.push(byte),
                     None => return Err(NameTruncated),
                 },
-                b'"' => return Err(NameQuotes),
+                // label delimiter
+                b'.' => pos = label(&mut v, pos)?,
+                // RFC 4034 canonical case
+                b'A'..=b'Z' => v.push(byte - b'A' + b'a'),
+                // everything else
                 _ => v.push(byte),
             }
         }
