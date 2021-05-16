@@ -1,5 +1,5 @@
 pub mod bmpvec;
-pub mod dname;
+pub mod dnsname;
 pub mod error;
 pub mod trieprep;
 
