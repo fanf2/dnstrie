@@ -2,21 +2,22 @@
 //! ============================
 //!
 //! This kind of name is decompressed and canonicalized to lower case.
-//! The name and label pointers are stored in its workpad.
+//! The name and label pointers are stored in its scratch pad.
 
 use crate::dnsname::*;
+use crate::scratchpad::*;
 use core::convert::TryInto;
 
 #[derive(Debug, Default)]
 pub struct TempName {
-    label: WorkPad<u8, MAX_LABEL>,
-    octet: WorkPad<u8, MAX_OCTET>,
+    label: ScratchPad<u8, MAX_LABEL>,
+    octet: ScratchPad<u8, MAX_OCTET>,
 }
 
 impl TempName {
     #[inline(always)]
     pub fn new() -> Self {
-        TempName { label: WorkPad::new(), octet: WorkPad::new() }
+        TempName { label: ScratchPad::new(), octet: ScratchPad::new() }
     }
 }
 
@@ -42,12 +43,12 @@ impl DnsNameParser for TempName {
         lpos: usize,
         llen: u8,
     ) -> Result<()> {
-        self.label.push(self.octet.len().try_into()?);
-        self.octet.push(llen);
+        self.label.push(self.octet.len().try_into()?)?;
+        self.octet.push(llen)?;
         for i in 1..=llen as usize {
             match wire[lpos + i] {
-                upper @ b'A'..=b'Z' => self.octet.push(upper - b'A' + b'a'),
-                other => self.octet.push(other),
+                upper @ b'A'..=b'Z' => self.octet.push(upper - b'A' + b'a')?,
+                other => self.octet.push(other)?,
             }
         }
         Ok(())

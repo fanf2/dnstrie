@@ -29,4 +29,6 @@ pub enum Error {
     NameQuotes,
     #[error("DNS name is truncated")]
     NameTruncated,
+    #[error("Buffer overflow")]
+    Overflow,
 }

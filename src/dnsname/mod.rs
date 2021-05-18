@@ -30,10 +30,8 @@
 //! that implies.
 
 pub mod temp;
-pub mod workpad;
 
 pub use self::temp::*;
-pub(self) use self::workpad::*;
 
 use crate::error::Error::*;
 use crate::error::*;
