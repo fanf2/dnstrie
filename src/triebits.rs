@@ -1,3 +1,6 @@
+//! Bitmap layout for DNS qp-trie
+//! =============================
+
 // const SHIFT_BRANCH: u8 = 0;
 // const SHIFT_NOBYTE: u8 = 1;
 const SHIFT_BITMAP: u8 = 2;
