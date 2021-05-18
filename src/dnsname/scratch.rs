@@ -9,19 +9,19 @@ use crate::scratchpad::*;
 use core::convert::TryInto;
 
 #[derive(Debug, Default)]
-pub struct TempName {
+pub struct ScratchName {
     label: ScratchPad<u8, MAX_LABEL>,
     octet: ScratchPad<u8, MAX_OCTET>,
 }
 
-impl TempName {
+impl ScratchName {
     #[inline(always)]
     pub fn new() -> Self {
-        TempName { label: ScratchPad::new(), octet: ScratchPad::new() }
+        ScratchName { label: ScratchPad::new(), octet: ScratchPad::new() }
     }
 }
 
-impl DnsName for TempName {
+impl DnsName for ScratchName {
     fn namelen(&self) -> usize {
         self.octet.len()
     }
@@ -36,7 +36,7 @@ impl DnsName for TempName {
     }
 }
 
-impl DnsNameParser for TempName {
+impl DnsNameParser for ScratchName {
     fn parsed_label(
         &mut self,
         wire: &[u8],
@@ -55,7 +55,7 @@ impl DnsNameParser for TempName {
     }
 }
 
-impl<'n> std::fmt::Display for TempName {
+impl<'n> std::fmt::Display for ScratchName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.to_text(f)
     }
@@ -68,7 +68,7 @@ mod test {
     #[test]
     fn test() -> Result<()> {
         let wire = b"\x05dotat\x02at\x00";
-        let mut name = TempName::new();
+        let mut name = ScratchName::new();
         name.from_wire(None, wire)?;
         assert_eq!("dotat.at", format!("{}", name));
         Ok(())

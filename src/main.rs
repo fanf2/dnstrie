@@ -1,4 +1,4 @@
-use dnstrie::trieprep::BYTE_TO_BITS;
+use dnstrie::triebits::BYTE_TO_BITS;
 
 fn main() {
     for (byte, &bits) in BYTE_TO_BITS.iter().enumerate() {

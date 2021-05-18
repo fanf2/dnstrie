@@ -1,8 +1,8 @@
 //! DNS names
 //! =========
 //!
-//! buffering temporary names
-//! -------------------------
+//! scratch space for temporary names
+//! ---------------------------------
 //!
 //! In some cases we need to reformat a name, and the altered copy is
 //! only needed temporarily.
@@ -17,21 +17,12 @@
 //!     how much the name expands due to escaping, so this requires
 //!     two passes, but we want to avoid any more than that.
 //!
-//! We would like to make these reformatted names without allocating.
-//! There is a common `dnsname::Buffer` type which is a fixed size
-//! large enough for any DNS-name related purpose.
-//!
-//! The caller creates a buffer on the stack and passes it to a
-//! function that needs it. This is a manual return value
-//! optimization, because Rust does not yet do that automatically.
-//!
-//! Functions that use a `Buffer` retain a reference to it as part of
-//! the return value, in effect taking ownership without the move that
-//! that implies.
+//! We use [`ScratchPad`][crate::scratchpad::ScratchPad]s to make
+//! these reformatted names without allocating.
 
-pub mod temp;
+pub mod scratch;
 
-pub use self::temp::*;
+pub use self::scratch::*;
 
 use crate::error::Error::*;
 use crate::error::*;
