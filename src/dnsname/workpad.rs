@@ -4,30 +4,43 @@
 //! This is an append-only fixed-size memory area that avoids
 //! initializing the elements before they are added.
 
-use core::mem::MaybeUninit;
-
 pub struct WorkPad<T, const SIZE: usize> {
-    uninit: [MaybeUninit<T>; SIZE],
+    uninit: [std::mem::MaybeUninit<T>; SIZE],
     end: usize,
 }
 
-macro_rules! workpad_uninit {
-    ($T:ty, $SIZE:literal) => {
+impl<T, const SIZE: usize> Default for WorkPad<T, SIZE> {
+    fn default() -> Self {
         // SAFETY: The `assume_init` is safe because an array of
         // `MaybeUninit`s does not require initialization.
-        WorkPad<$T, $SIZE> {
-            uninit: unsafe { MaybeUninit::uninit().assume_init() },
+        WorkPad {
+            uninit: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
             end: 0,
         }
-    };
+    }
 }
 
-impl<T, const SIZE: usize> WorkPad<T, SIZE>
+impl<T, const SIZE: usize> std::fmt::Debug for WorkPad<T, SIZE>
 where
-    T: Copy,
+    T: std::fmt::Debug,
 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}({:?})", std::any::type_name::<Self>(), self.as_slice())
+    }
+}
+
+impl<T, const SIZE: usize> WorkPad<T, SIZE> {
+    #[inline(always)]
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     pub fn len(&self) -> usize {
         self.end
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.end == 0
     }
 
     pub fn as_slice(&self) -> &[T] {
@@ -35,7 +48,7 @@ where
         // mutate it again; the origin of the pointer means its alignment,
         // size, and nullity are OK.
         let ptr = self.uninit[0].as_ptr();
-        unsafe { core::slice::from_raw_parts(ptr, self.end) }
+        unsafe { std::slice::from_raw_parts(ptr, self.end) }
     }
 
     pub fn append(&mut self, elems: &[T]) {

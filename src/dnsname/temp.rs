@@ -4,34 +4,23 @@
 //! This kind of name is decompressed and canonicalized to lower case.
 //! The name and label pointers are stored in its workpad.
 
-use super::*;
+use crate::dnsname::*;
 use core::convert::TryInto;
 
-pub struct TempName<'n> {
-    pad: &'n TempNameWorkPad,
-    label: &'n [u8],
-    octet: &'n [u8],
-}
-
-pub struct TempNameWorkPad {
+#[derive(Debug, Default)]
+pub struct TempName {
     label: WorkPad<u8, MAX_LABEL>,
     octet: WorkPad<u8, MAX_OCTET>,
 }
 
-macro_rules! tempname_workpad {
-    () => {
-        TempNameWorkPad {
-            label: workpad_uninit!(u8, MAX_LABEL),
-            octet: workpad_uninit!(u8, MAX_OCTET),
-        }
-    };
+impl TempName {
+    #[inline(always)]
+    pub fn new() -> Self {
+        TempName { label: WorkPad::new(), octet: WorkPad::new() }
+    }
 }
 
-impl<'n> DnsName for TempName<'n> {
-    type NameRef = &'n [u8];
-
-    type WorkPad = &'n mut TempNameWorkPad;
-
+impl DnsName for TempName {
     fn namelen(&self) -> usize {
         self.octet.len()
     }
@@ -40,30 +29,47 @@ impl<'n> DnsName for TempName<'n> {
         self.label.len()
     }
 
-    fn label(&self, lab: usize) -> Option<&'n [u8]> {
-        Some(slice_label(self.octet, *self.label.get(lab)? as usize))
+    fn label(&self, lab: usize) -> Option<&[u8]> {
+        let pos = *self.label.as_slice().get(lab)?;
+        Some(slice_label(self.octet.as_slice(), pos as usize))
     }
+}
 
+impl DnsNameParser for TempName {
     fn parsed_label(
-        pad: Self::WorkPad,
-        wire: Self::NameRef,
+        &mut self,
+        wire: &[u8],
         lpos: usize,
         llen: u8,
     ) -> Result<()> {
-        pad.label.push(pad.octet.len().try_into()?);
-        pad.octet.push(llen);
+        self.label.push(self.octet.len().try_into()?);
+        self.octet.push(llen);
         for i in 1..=llen as usize {
             match wire[lpos + i] {
-                upper @ b'A'..=b'Z' => pad.octet.push(upper - b'A' + b'a'),
-                other => pad.octet.push(other),
+                upper @ b'A'..=b'Z' => self.octet.push(upper - b'A' + b'a'),
+                other => self.octet.push(other),
             }
         }
         Ok(())
     }
+}
 
-    fn parsed_name(pad: Self::WorkPad) -> Self {
-        let label = pad.label.as_slice();
-        let octet = pad.octet.as_slice();
-        TempName { pad, label, octet }
+impl<'n> std::fmt::Display for TempName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_text(f)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::dnsname::*;
+
+    #[test]
+    fn test() -> Result<()> {
+        let wire = b"\x05dotat\x02at\x00";
+        let mut name = TempName::new();
+        name.from_wire(None, wire)?;
+        assert_eq!("dotat.at", format!("{}", name));
+        Ok(())
     }
 }

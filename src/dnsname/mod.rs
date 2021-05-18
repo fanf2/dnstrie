@@ -29,12 +29,14 @@
 //! the return value, in effect taking ownership without the move that
 //! that implies.
 
-mod temp;
-mod workpad;
+pub mod temp;
+pub mod workpad;
+
+pub use self::temp::*;
+pub(self) use self::workpad::*;
 
 use crate::error::Error::*;
 use crate::error::*;
-use workpad::WorkPad;
 
 /// Maximum length of a DNS name, in octets on the wire.
 pub const MAX_OCTET: usize = 255;
@@ -48,14 +50,10 @@ pub const MAX_LABEL: usize = (MAX_OCTET - 1) / 2 + 1;
 
 /// A DNS name in wire format.
 ///
-/// This trait has the functions common to all kinds of name.
+/// This trait has the functions common to DNS names that own the name
+/// data (i.e. not `WireName`)
 ///
 pub trait DnsName {
-    /// This should be &[u8] with the right lifetime
-    type NameRef;
-    /// The type of working space for parsing
-    type WorkPad;
-
     /// The length of the name in uncompressed wire format
     fn namelen(&self) -> usize;
 
@@ -66,23 +64,14 @@ pub trait DnsName {
     ///
     /// Returns `None` if the label number is out of range.
     ///
-    fn label(&self, lab: usize) -> Option<Self::NameRef>;
+    fn label(&self, lab: usize) -> Option<&[u8]>;
 
-    /// Returns [`LabelIter`], an iterator visiting each label in a `DnsName`
-    fn label_iter(&self) -> LabelIter<Self>
-    where
-        Self: Sized,
-    {
-        LabelIter { name: &self, lab: 0, pos: 0 }
-    }
-
-    fn to_text<'n>(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-    where
-        Self: DnsName<NameRef = &'n [u8]> + Sized,
-    {
-        for (lab, _, label) in self.label_iter() {
-            let bytes = &label[1..];
-            for &byte in bytes.iter() {
+    fn to_text(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let labs = self.labels();
+        for lab in 0..labs {
+            let label = self.label(lab).unwrap();
+            let text = &label[1..];
+            for &byte in text.iter() {
                 match byte {
                     b'*' | b'-' | b'_' | // permitted punctuation
                     b'0'..=b'9' |
@@ -92,25 +81,18 @@ pub trait DnsName {
                     _ => write!(f, "\\{:03}", byte)?,
                 }
             }
-            let not_root = label.len() > 1;
-            let only_root = lab == 0;
-            if not_root || only_root {
+            if lab == 0 || lab + 2 < labs {
                 write!(f, ".")?;
             }
         }
         Ok(())
     }
+}
+
+pub trait DnsNameParser {
     /// Parse a DNS name from wire format.
     ///
-    fn from_wire<'n>(
-        decomp: Option<usize>,
-        pad: Self::WorkPad,
-        wire: Self::NameRef,
-    ) -> Result<Self>
-    where
-        Self: DnsName<NameRef = &'n [u8]> + Sized,
-        Self::WorkPad: Copy,
-    {
+    fn from_wire(&mut self, decomp: Option<usize>, wire: &[u8]) -> Result<()> {
         let mut pos = decomp.unwrap_or(0);
         let mut max = pos;
         let mut len = 0;
@@ -142,13 +124,13 @@ pub trait DnsName {
             if len + step > MAX_OCTET {
                 return Err(NameLength);
             }
-            Self::parsed_label(pad, wire, pos, llen)?;
+            self.parsed_label(wire, pos, llen)?;
             if llen > 0 {
                 labs += 1;
                 len += step;
                 pos += step;
             } else {
-                return Ok(Self::parsed_name(pad));
+                return Ok(());
             }
         }
     }
@@ -156,50 +138,11 @@ pub trait DnsName {
     /// Add a label to the work pad, located on the `wire` at the
     /// given position with the given length.
     fn parsed_label(
-        pad: Self::WorkPad,
-        wire: Self::NameRef,
+        &mut self,
+        wire: &[u8],
         lpos: usize,
         llen: u8,
-    ) -> Result<()>
-    where
-        Self: DnsName;
-
-    /// Finish parsing the name
-    fn parsed_name(pad: Self::WorkPad) -> Self;
-}
-
-/// An iterator visiting each label in a DNS name
-///
-/// The iterator yeilds a tuple containing:
-///
-///   * the label number;
-///   * the position of the label in the name;
-///   * a slice covering the label length byte and the label text.
-///
-/// Returned by [`DnsName::label_iter()`]
-///
-pub struct LabelIter<'n, N> {
-    name: &'n N,
-    lab: usize,
-    pos: usize,
-}
-
-impl<'r, 'n, N> Iterator for LabelIter<'n, N>
-where
-    N: DnsName<NameRef = &'r [u8]> + Sized,
-{
-    type Item = (usize, usize, <N as DnsName>::NameRef);
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(label) = self.name.label(self.lab) {
-            let lab = self.lab;
-            let pos = self.pos;
-            self.lab += 1;
-            self.pos += label.len();
-            Some((lab, pos, label))
-        } else {
-            None
-        }
-    }
+    ) -> Result<()>;
 }
 
 /// Helper function to get a slice covering a label
