@@ -1,7 +1,7 @@
 use crate::bmpvec::*;
 use crate::test::blimpvec::*;
 
-pub fn bmpvec_blimpvec(data: &[u8]) {
+pub fn exercise(data: &[u8]) {
     let mut bmp = BmpVec::new();
     let mut blimp = BlimpVec::new();
 
@@ -68,7 +68,6 @@ pub fn bmpvec_blimpvec(data: &[u8]) {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::iter::repeat_with;
 
     #[test]
@@ -76,6 +75,6 @@ mod test {
         eprintln!("rand");
         let v: Vec<u8> = repeat_with(|| fastrand::u8(..)).take(1000).collect();
         eprintln!("exercise");
-        bmpvec_blimpvec(&v[..]);
+        crate::test::bmpvec::exercise(&v[..]);
     }
 }

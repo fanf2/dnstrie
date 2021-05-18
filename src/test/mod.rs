@@ -1,2 +1,2 @@
 pub mod blimpvec;
-pub mod exercise;
+pub mod bmpvec;

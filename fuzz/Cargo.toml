@@ -20,7 +20,7 @@ features = ["test"]
 members = ["."]
 
 [[bin]]
-name = "fuzz"
-path = "src/fuzz.rs"
+name = "bmpvec"
+path = "src/bmpvec.rs"
 test = false
 doc = false
