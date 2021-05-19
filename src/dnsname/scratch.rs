@@ -20,6 +20,11 @@ impl ScratchName {
     pub fn new() -> Self {
         ScratchName { lpos: ScratchPad::new(), name: ScratchPad::new() }
     }
+
+    pub fn clear(&mut self) {
+        self.lpos.clear();
+        self.name.clear();
+    }
 }
 
 impl DnsName for ScratchName {

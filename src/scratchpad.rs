@@ -5,6 +5,13 @@
 //! initializing the elements before they are added.
 //!
 //! It can be cleared (reset to empty) and re-used.
+//!
+//! If an append causes an overflow, [`Error::NameLength`] is returned,
+//! which is suitable when parsing names from the wire. This means that a
+//! `ScratchPad` can be sized to exactly match the protocol limits
+//! [`crate::dnsname::MAX_NAME`] and [`crate::dnsname::MAX_LABS`] and
+//! there's no need for any overflow checking before writing to the
+//! `ScratchPad`.
 
 use crate::error::*;
 use std::mem::MaybeUninit;

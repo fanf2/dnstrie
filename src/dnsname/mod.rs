@@ -47,6 +47,8 @@
 //! We use [`ScratchPad`][crate::scratchpad::ScratchPad]s to make
 //! these reformatted names without allocating.
 
+mod labels;
+
 pub mod scratch;
 
 pub use self::scratch::*;
