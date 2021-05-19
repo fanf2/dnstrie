@@ -66,7 +66,7 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
     }
 
     fn get_mut(&mut self, pos: usize) -> Result<*mut T> {
-        Ok(self.uninit.get_mut(pos).ok_or(Error::Overflow)?.as_mut_ptr())
+        Ok(self.uninit.get_mut(pos).ok_or(Error::NameLength)?.as_mut_ptr())
     }
 
     pub fn append(&mut self, elems: &[T]) -> Result<()> {

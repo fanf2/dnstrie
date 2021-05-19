@@ -5,50 +5,52 @@
 //! The name and label pointers are stored in its scratch pad.
 
 use crate::dnsname::*;
+use crate::error::*;
 use crate::scratchpad::*;
 use core::convert::TryInto;
 
 #[derive(Debug, Default)]
 pub struct ScratchName {
-    label: ScratchPad<u8, MAX_LABEL>,
-    octet: ScratchPad<u8, MAX_OCTET>,
+    lpos: ScratchPad<u8, MAX_LABS>,
+    name: ScratchPad<u8, MAX_NAME>,
 }
 
 impl ScratchName {
     #[inline(always)]
     pub fn new() -> Self {
-        ScratchName { label: ScratchPad::new(), octet: ScratchPad::new() }
+        ScratchName { lpos: ScratchPad::new(), name: ScratchPad::new() }
     }
 }
 
 impl DnsName for ScratchName {
     fn namelen(&self) -> usize {
-        self.octet.len()
+        self.name.len()
     }
 
     fn labels(&self) -> usize {
-        self.label.len()
+        self.lpos.len()
     }
 
     fn label(&self, lab: usize) -> Option<&[u8]> {
-        let pos = *self.label.as_slice().get(lab)?;
-        Some(slice_label(self.octet.as_slice(), pos as usize))
+        let pos = *self.lpos.as_slice().get(lab)?;
+        Some(slice_label(self.name.as_slice(), pos as usize))
     }
 }
 
 impl FromWire for ScratchName {
     fn parsed_label(
         &mut self,
-        wire: &[u8],
-        lpos: usize,
+        wire: Wire,
+        rpos: usize,
         llen: u8,
     ) -> Result<()> {
-        self.label.push(self.octet.len().try_into()?)?;
-        self.octet.push(llen)?;
+        let wpos = self.name.len().try_into()?;
+        self.lpos.push(wpos)?;
+        self.name.push(llen)?;
         for i in 1..=llen as usize {
-            match wire[lpos + i] {
-                upper @ b'A'..=b'Z' => self.octet.push(upper - b'A' + b'a')?,
-                other => self.octet.push(other)?,
+            match wire.get(rpos + i)? {
+                upper @ b'A'..=b'Z' => self.name.push(upper - b'A' + b'a')?,
+                other => self.name.push(other)?,
             }
         }
         Ok(())

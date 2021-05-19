@@ -15,18 +15,14 @@ pub enum Error {
     CompressChain,
     #[error("arithmetic overflow")]
     FromInt(#[from] std::num::TryFromIntError),
-    #[error("Domain name label is too long")]
-    LabelLength,
     #[error("unsupported label type {0} (see RFC 6891)")]
     LabelType(u8),
     #[error("DNS name has too many labels")]
     NameLabels,
     #[error("DNS name is too long")]
     NameLength,
-    #[error("Domain name contains \"")]
+    #[error("domain name contains \"")]
     NameQuotes,
     #[error("DNS name is truncated")]
     NameTruncated,
-    #[error("Buffer overflow")]
-    Overflow,
 }

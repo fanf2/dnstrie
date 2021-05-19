@@ -1,6 +1,33 @@
 //! DNS names
 //! =========
 //!
+//! terminology
+//! -----------
+//!
+//!   * label: a slice covering a label
+//!
+//!   * labels: function to get count of labels in a name
+//!
+//!   * lab: a label number, 0 <= lab < labs
+//!
+//!   * labs: variable containing count of labels in a name
+//!
+//!   * llen: length of a label
+//!
+//!   * lpos: slice of label positions
+//!
+//!   * name: a slice covering a contiguous (uncompressed) name
+//!
+//!   * nlen: length of the name
+//!
+//!   * pos: current position in a slice
+//!
+//!   * rpos: read position
+//!
+//!   * wire: a slice of untrustworthy data
+//!
+//!   * wpos: write position
+//!
 //! scratch space for temporary names
 //! ---------------------------------
 //!
@@ -28,14 +55,14 @@ use crate::error::Error::*;
 use crate::error::*;
 
 /// Maximum length of a DNS name, in octets on the wire.
-pub const MAX_OCTET: usize = 255;
+pub const MAX_NAME: usize = 255;
 
 /// Maximum number of labels in a DNS name.
 ///
 /// Calculated by removing one octet for the root zone, dividing by
 /// the smallest possible label, then adding back the root.
 ///
-pub const MAX_LABEL: usize = (MAX_OCTET - 1) / 2 + 1;
+pub const MAX_LABS: usize = (MAX_NAME - 1) / 2 + 1;
 
 /// A DNS name in wire format.
 ///
@@ -79,6 +106,18 @@ pub trait DnsName {
     }
 }
 
+/// Wrapper for panic-free indexing into data from the wire
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Wire<'w> {
+    wire: &'w [u8],
+}
+
+impl Wire<'_> {
+    fn get(self, pos: usize) -> Result<u8> {
+        self.wire.get(pos).map_or(Err(NameTruncated), |p| Ok(*p))
+    }
+}
+
 pub trait FromWire {
     /// Parse a DNS name from wire format.
     ///
@@ -93,17 +132,16 @@ pub trait FromWire {
     /// applies, and `pos` should be zero.
     ///
     fn from_wire(&mut self, wire: &[u8], mut pos: usize) -> Result<()> {
+        let wire = Wire { wire };
         let mut max = pos;
-        let mut len = 0;
-        let mut labs = 0;
         loop {
-            let llen = match *wire.get(pos).ok_or(NameTruncated)? {
+            let llen = match wire.get(pos)? {
                 len @ 0x00..=0x3F => len,
                 wat @ 0x40..=0xBF => return Err(LabelType(wat)),
                 hi @ 0xC0..=0xFF => {
-                    let lo = *wire.get(pos + 1).ok_or(NameTruncated)?;
+                    let lo = wire.get(pos + 1)?;
                     pos = (hi as usize & 0x3F) << 8 | lo as usize;
-                    if let Some(0xC0..=0xFF) = wire.get(pos) {
+                    if let 0xC0..=0xFF = wire.get(pos)? {
                         return Err(CompressChain);
                     } else if pos >= max {
                         return Err(CompressBad);
@@ -113,18 +151,9 @@ pub trait FromWire {
                     }
                 }
             };
-            let step = 1 + llen as usize;
-            if labs + 1 > MAX_LABEL {
-                return Err(NameLabels);
-            }
-            if len + step > MAX_OCTET {
-                return Err(NameLength);
-            }
             self.parsed_label(wire, pos, llen)?;
             if llen > 0 {
-                labs += 1;
-                len += step;
-                pos += step;
+                pos += 1 + llen as usize;
             } else {
                 return Ok(());
             }
@@ -133,26 +162,24 @@ pub trait FromWire {
 
     /// Add a label to the work pad, located on the `wire` at the
     /// given position with the given length.
-    fn parsed_label(
-        &mut self,
-        wire: &[u8],
-        lpos: usize,
-        llen: u8,
-    ) -> Result<()>;
+    fn parsed_label(&mut self, wire: Wire, lpos: usize, llen: u8)
+        -> Result<()>;
 }
 
 /// Helper function to get a slice covering a label
 ///
 /// The slice covers both the length byte and the label text.
 ///
+/// This is for use with names that have been parsed.
+///
 /// # Panics
 ///
-/// Panics if the label extends past the end of the octets.
+/// Panics if the label extends past the end of the name.
 ///
 /// Doesn't check the high bits of the label length byte.
 ///
-fn slice_label(octet: &[u8], start: usize) -> &[u8] {
-    let len = octet[start] as usize;
-    let end = start + len;
-    &octet[start..=end]
+fn slice_label(name: &[u8], start: usize) -> &[u8] {
+    let llen = name[start] as usize;
+    let end = start + llen;
+    &name[start..=end]
 }
