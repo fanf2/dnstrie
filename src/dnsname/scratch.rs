@@ -36,7 +36,7 @@ impl DnsName for ScratchName {
     }
 }
 
-impl DnsNameParser for ScratchName {
+impl FromWire for ScratchName {
     fn parsed_label(
         &mut self,
         wire: &[u8],

@@ -78,7 +78,7 @@ pub trait DnsName {
     }
 }
 
-pub trait DnsNameParser {
+pub trait FromWire {
     /// Parse a DNS name from wire format.
     ///
     fn from_wire(&mut self, decomp: Option<usize>, wire: &[u8]) -> Result<()> {
