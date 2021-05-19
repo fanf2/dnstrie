@@ -9,12 +9,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("DNS name compression not allowed")]
-    CompressBan,
+    #[error("DNS name has a bad compression pointer")]
+    CompressBad,
     #[error("DNS name has chained compression pointers")]
     CompressChain,
-    #[error("DNS name has wild compression pointer")]
-    CompressWild,
     #[error("arithmetic overflow")]
     FromInt(#[from] std::num::TryFromIntError),
     #[error("Domain name label is too long")]

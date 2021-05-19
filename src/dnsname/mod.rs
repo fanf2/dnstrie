@@ -67,6 +67,7 @@ pub trait DnsName {
                     b'A'..=b'Z' |
                     b'a'..=b'z' => write!(f, "{}", byte as char)?,
                     b'!'..=b'~' => write!(f, "\\{}", byte as char)?,
+                    // RFC 1035 peculiar decimal escapes
                     _ => write!(f, "\\{:03}", byte)?,
                 }
             }
@@ -81,8 +82,17 @@ pub trait DnsName {
 pub trait FromWire {
     /// Parse a DNS name from wire format.
     ///
-    fn from_wire(&mut self, decomp: Option<usize>, wire: &[u8]) -> Result<()> {
-        let mut pos = decomp.unwrap_or(0);
+    /// To parse a compressed name in a DNS message, the `wire` slice
+    /// should cover the whole message, or if the name is inside a
+    /// record's RDATA, a slice from the start of the message to the
+    /// end of the RDATA. The `pos` should be the index of the start
+    /// of the name in the message.
+    ///
+    /// To parse a name when compression is not allowed, the slice
+    /// should extend from the start of the name to whatever limit
+    /// applies, and `pos` should be zero.
+    ///
+    fn from_wire(&mut self, wire: &[u8], mut pos: usize) -> Result<()> {
         let mut max = pos;
         let mut len = 0;
         let mut labs = 0;
@@ -91,19 +101,16 @@ pub trait FromWire {
                 len @ 0x00..=0x3F => len,
                 wat @ 0x40..=0xBF => return Err(LabelType(wat)),
                 hi @ 0xC0..=0xFF => {
-                    if decomp == None {
-                        return Err(CompressBan);
-                    }
                     let lo = *wire.get(pos + 1).ok_or(NameTruncated)?;
                     pos = (hi as usize & 0x3F) << 8 | lo as usize;
-                    if pos >= max {
-                        return Err(CompressWild);
-                    }
-                    max = pos;
                     if let Some(0xC0..=0xFF) = wire.get(pos) {
                         return Err(CompressChain);
+                    } else if pos >= max {
+                        return Err(CompressBad);
+                    } else {
+                        max = pos;
+                        continue;
                     }
-                    continue;
                 }
             };
             let step = 1 + llen as usize;

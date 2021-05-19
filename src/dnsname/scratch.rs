@@ -69,7 +69,7 @@ mod test {
     fn test() -> Result<()> {
         let wire = b"\x05dotat\x02at\x00";
         let mut name = ScratchName::new();
-        name.from_wire(None, wire)?;
+        name.from_wire(wire, 0)?;
         assert_eq!("dotat.at", format!("{}", name));
         Ok(())
     }
