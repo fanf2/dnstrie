@@ -68,20 +68,30 @@ pub const MAX_NAME: usize = 255;
 ///
 pub const MAX_LABS: usize = (MAX_NAME - 1) / 2 + 1;
 
-/// A DNS name in uncompressed lowercase wire format.
+/// A DNS name where we only have information about the labels.
 ///
-pub trait DnsName {
-    /// A slice covering the name.
-    fn name(&self) -> &[u8];
-
-    /// The length of the name in uncompressed wire format
-    fn nlen(&self) -> usize;
-
+/// [`WireLabels`] are not able to implement all the [`DnsName`]
+/// methods, so this supertrait includes the ones that it can.
+///
+/// The generic parameter is because [`WireLabels`] can store label
+/// positions as `u8` or `u16`.
+///
+pub trait DnsLabels<P> {
     /// The number of labels in the name
     fn labs(&self) -> usize;
 
     /// A slice containing the positions of the labels in the name.
-    fn lpos(&self) -> &[u8];
+    fn lpos(&self) -> &[P];
+
+    /// The length of the name in uncompressed wire format
+    fn nlen(&self) -> usize;
+}
+
+/// A DNS name in uncompressed lowercase wire format.
+///
+pub trait DnsName: DnsLabels<u8> {
+    /// A slice covering the name.
+    fn name(&self) -> &[u8];
 
     /// A slice covering a label's length byte and its text
     ///

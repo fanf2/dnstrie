@@ -27,21 +27,23 @@ impl ScratchName {
     }
 }
 
-impl DnsName for ScratchName {
-    fn name(&self) -> &[u8] {
-        self.name.as_slice()
-    }
-
-    fn nlen(&self) -> usize {
-        self.name.len()
-    }
-
+impl DnsLabels<u8> for ScratchName {
     fn labs(&self) -> usize {
         self.lpos.len()
     }
 
     fn lpos(&self) -> &[u8] {
         self.lpos.as_slice()
+    }
+
+    fn nlen(&self) -> usize {
+        self.name.len()
+    }
+}
+
+impl DnsName for ScratchName {
+    fn name(&self) -> &[u8] {
+        self.name.as_slice()
     }
 
     fn label(&self, lab: usize) -> Option<&[u8]> {

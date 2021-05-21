@@ -25,12 +25,15 @@ use crate::scratchpad::*;
 use std::convert::TryInto;
 
 #[derive(Debug, Default)]
-pub struct WireLabels<T> {
-    lpos: ScratchPad<T, MAX_LABS>,
+pub struct WireLabels<P> {
+    lpos: ScratchPad<P, MAX_LABS>,
     nlen: usize,
 }
 
-impl<T> WireLabels<T> {
+impl<P> WireLabels<P>
+where
+    P: Copy,
+{
     #[inline(always)]
     pub fn new() -> Self {
         WireLabels { lpos: ScratchPad::new(), nlen: 0 }
@@ -40,20 +43,19 @@ impl<T> WireLabels<T> {
         self.lpos.clear();
         self.nlen = 0;
     }
+}
 
-    fn namelen(&self) -> usize {
-        self.nlen
-    }
-
-    fn labels(&self) -> usize {
+impl<P> DnsLabels<P> for WireLabels<P> {
+    fn labs(&self) -> usize {
         self.lpos.len()
     }
 
-    fn lpos(&self, lab: usize) -> Option<T>
-    where
-        T: Copy,
-    {
-        Some(*self.lpos.as_slice().get(lab)?)
+    fn lpos(&self) -> &[P] {
+        self.lpos.as_slice()
+    }
+
+    fn nlen(&self) -> usize {
+        self.nlen
     }
 }
 

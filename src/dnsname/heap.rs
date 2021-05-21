@@ -68,23 +68,10 @@ unsafe impl Send for HeapName {}
 /// SAFETY: the data in a [`HeapName`] is unaliased.
 unsafe impl Sync for HeapName {}
 
-impl DnsName for HeapName {
+impl DnsLabels<u8> for HeapName {
     fn labs(&self) -> usize {
         // SAFETY: see [`HeapName`] under "Safety"
         unsafe { self.mem.read() as usize }
-    }
-
-    fn nlen(&self) -> usize {
-        // SAFETY: see [`HeapName`] under "Safety"
-        unsafe { self.mem.add(self.labs()).read() as usize + 1 }
-    }
-
-    fn name(&self) -> &[u8] {
-        // SAFETY: see [`HeapName`] under "Safety"
-        unsafe {
-            let name = self.mem.add(1 + self.labs());
-            std::slice::from_raw_parts(name, self.nlen())
-        }
     }
 
     fn lpos(&self) -> &[u8] {
@@ -95,22 +82,39 @@ impl DnsName for HeapName {
         }
     }
 
+    fn nlen(&self) -> usize {
+        // SAFETY: see [`HeapName`] under "Safety"
+        unsafe { self.mem.add(self.labs()).read() as usize + 1 }
+    }
+}
+
+impl DnsName for HeapName {
+    fn name(&self) -> &[u8] {
+        // SAFETY: see [`HeapName`] under "Safety"
+        unsafe {
+            let name = self.mem.add(1 + self.labs());
+            std::slice::from_raw_parts(name, self.nlen())
+        }
+    }
+
     fn label(&self, lab: usize) -> Option<&[u8]> {
-        let labs = Some(self.labs()).filter(|&labs| lab < labs)?;
-        let pos = self.lpos()[1 + lab] as usize;
+        let pos = *self.lpos().get(lab)? as usize;
         Some(slice_label(self.name(), pos))
     }
 }
 
 /// Calculate the allocation size for a [`HeapName`],
-
-trait HeapLen: DnsName {
+///
+/// This is just a small extension to the [`DnsLabels`] trait,
+/// specific to the needs of a [`HeapName`].
+///
+trait HeapLen<P>: DnsLabels<P> {
     fn heap_len(&self) -> usize {
         1 + self.labs() + self.nlen()
     }
 }
 
-impl<T: DnsName> HeapLen for T {}
+impl<P, N: DnsLabels<P>> HeapLen<P> for N {}
 
 impl From<ScratchName> for HeapName {
     fn from(scratch: ScratchName) -> HeapName {
