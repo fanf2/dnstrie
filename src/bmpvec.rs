@@ -34,16 +34,16 @@ use std::marker::PhantomData;
 pub struct BmpVec<T> {
     bmp: Bmp,
     ptr: *mut T,
-    // NOTE: the marker tells dropck that we logically own a `T`.
+    // NOTE: the marker tells dropck that we logically own some `T`.
     _marker: PhantomData<T>,
 }
 
-/// A `BmpVec<T>` is `Send` if `T` is `Send` because the data it contains is
-/// unaliased.
+/// SAFETY: A `BmpVec<T>` is `Send` if `T` is `Send` because the data it
+/// contains is unaliased.
 unsafe impl<T: Send> Send for BmpVec<T> {}
 
-/// A `BmpVec<T>` is `Sync` if `T` is `Sync` because the data it contains is
-/// unaliased.
+/// SAFETY: A `BmpVec<T>` is `Sync` if `T` is `Sync` because the data it
+/// contains is unaliased.
 unsafe impl<T: Sync> Sync for BmpVec<T> {}
 
 impl<T> Drop for BmpVec<T> {
