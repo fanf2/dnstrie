@@ -15,6 +15,8 @@ pub enum Error {
     CompressChain,
     #[error("arithmetic overflow")]
     FromInt(#[from] std::num::TryFromIntError),
+    #[error("DNS name has an oversize label")]
+    LabelLength,
     #[error("unsupported label type {0} (see RFC 6891)")]
     LabelType(u8),
     #[error("DNS name has too many labels")]

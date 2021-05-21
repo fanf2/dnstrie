@@ -47,10 +47,12 @@
 //! We use [`ScratchPad`][crate::scratchpad::ScratchPad]s to make
 //! these reformatted names without allocating.
 
-mod labels;
+pub mod heap;
+
+pub(self) mod labels;
+pub(self) use self::labels::*;
 
 pub mod scratch;
-
 pub use self::scratch::*;
 
 use crate::error::Error::*;
@@ -66,17 +68,20 @@ pub const MAX_NAME: usize = 255;
 ///
 pub const MAX_LABS: usize = (MAX_NAME - 1) / 2 + 1;
 
-/// A DNS name in wire format.
-///
-/// This trait has the functions common to DNS names that own the name
-/// data (i.e. not `WireName`)
+/// A DNS name in uncompressed lowercase wire format.
 ///
 pub trait DnsName {
+    /// A slice covering the name.
+    fn name(&self) -> &[u8];
+
     /// The length of the name in uncompressed wire format
-    fn namelen(&self) -> usize;
+    fn nlen(&self) -> usize;
 
     /// The number of labels in the name
-    fn labels(&self) -> usize;
+    fn labs(&self) -> usize;
+
+    /// A slice containing the positions of the labels in the name.
+    fn lpos(&self) -> &[u8];
 
     /// A slice covering a label's length byte and its text
     ///
@@ -85,9 +90,9 @@ pub trait DnsName {
     fn label(&self, lab: usize) -> Option<&[u8]>;
 
     fn to_text(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let labs = self.labels();
+        let labs = self.labs();
         for lab in 0..labs {
-            let label = self.label(lab).unwrap();
+            let label = self.label(lab).ok_or(std::fmt::Error)?;
             let text = &label[1..];
             for &byte in text.iter() {
                 match byte {

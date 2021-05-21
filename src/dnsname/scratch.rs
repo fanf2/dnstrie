@@ -28,17 +28,25 @@ impl ScratchName {
 }
 
 impl DnsName for ScratchName {
-    fn namelen(&self) -> usize {
+    fn name(&self) -> &[u8] {
+        self.name.as_slice()
+    }
+
+    fn nlen(&self) -> usize {
         self.name.len()
     }
 
-    fn labels(&self) -> usize {
+    fn labs(&self) -> usize {
         self.lpos.len()
     }
 
+    fn lpos(&self) -> &[u8] {
+        self.lpos.as_slice()
+    }
+
     fn label(&self, lab: usize) -> Option<&[u8]> {
-        let pos = *self.lpos.as_slice().get(lab)?;
-        Some(slice_label(self.name.as_slice(), pos as usize))
+        let pos = *self.lpos().get(lab)?;
+        Some(slice_label(self.name(), pos as usize))
     }
 }
 
@@ -53,10 +61,7 @@ impl FromWire for ScratchName {
         self.lpos.push(wpos)?;
         self.name.push(llen)?;
         for i in 1..=llen as usize {
-            match wire.get(rpos + i)? {
-                upper @ b'A'..=b'Z' => self.name.push(upper - b'A' + b'a')?,
-                other => self.name.push(other)?,
-            }
+            self.name.push(wire.get(rpos + i)?.to_ascii_lowercase());
         }
         Ok(())
     }
