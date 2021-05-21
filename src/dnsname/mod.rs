@@ -48,11 +48,12 @@
 //! these reformatted names without allocating.
 
 pub mod heap;
-
-pub(self) mod labels;
+pub use self::heap::*;
 
 pub mod scratch;
 pub use self::scratch::*;
+
+pub(self) mod labels;
 
 use crate::error::Error::*;
 use crate::error::*;

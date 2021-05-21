@@ -81,6 +81,12 @@ impl LabelFromWire for ScratchName {
     }
 }
 
+impl FromText for ScratchName {
+    fn from_text(&mut self, text: &[u8]) -> Result<usize> {
+        Dodgy::fun(name_from_wire, self, text, 0)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::dnsname::*;

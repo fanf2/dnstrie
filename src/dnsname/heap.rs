@@ -12,6 +12,7 @@
 //!   * it only uses a single word to refer to the allocation.
 
 use crate::dnsname::*;
+use std::convert::TryFrom;
 use std::marker::PhantomData;
 
 /// A DNS name owned and allocated on the heap
@@ -117,10 +118,53 @@ trait HeapLen<P>: DnsLabels<P> {
     }
 }
 
-impl<P, N: DnsLabels<P>> HeapLen<P> for N {}
+impl<P, N> HeapLen<P> for N where N: DnsLabels<P> {}
 
 impl From<ScratchName> for HeapName {
     fn from(scratch: ScratchName) -> HeapName {
-        unimplemented!()
+        let mut vec = Vec::with_capacity(scratch.heap_len());
+        vec.push(scratch.labs() as u8);
+        vec.extend_from_slice(scratch.lpos());
+        vec.extend_from_slice(scratch.name());
+        let shrunk = vec.into_boxed_slice();
+        let slice_ptr = Box::into_raw(shrunk);
+        let mem = slice_ptr as *mut u8;
+        HeapName { mem, _marker: PhantomData }
+    }
+}
+
+impl TryFrom<&[u8]> for HeapName {
+    type Error = Error;
+    fn try_from(wire: &[u8]) -> Result<HeapName> {
+        let mut scratch = ScratchName::new();
+        scratch.from_wire(wire, 0)?;
+        Ok(scratch.into())
+    }
+}
+
+impl TryFrom<&str> for HeapName {
+    type Error = Error;
+    fn try_from(text: &str) -> Result<HeapName> {
+        let mut scratch = ScratchName::new();
+        let end = scratch.from_text(text.as_bytes())?;
+        if end == text.len() {
+            Ok(scratch.into())
+        } else {
+            Err(NameSyntax)
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::dnsname::*;
+    use std::convert::TryFrom;
+
+    #[test]
+    fn test() -> Result<()> {
+        let text = "dotat.at";
+        let name = HeapName::try_from(text)?;
+        assert_eq!(text, format!("{}", name));
+        Ok(())
     }
 }
