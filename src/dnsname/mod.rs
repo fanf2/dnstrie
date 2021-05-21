@@ -50,16 +50,20 @@
 pub mod heap;
 
 pub(self) mod labels;
-pub(self) use self::labels::*;
 
 pub mod scratch;
 pub use self::scratch::*;
 
 use crate::error::Error::*;
 use crate::error::*;
+use crate::scratchpad::ScratchPad;
+use std::convert::TryInto;
 
 /// Maximum length of a DNS name, in octets on the wire.
 pub const MAX_NAME: usize = 255;
+
+/// Maximum length of a DNS label, in octets on the wire.
+pub const MAX_LLEN: usize = 0x3F;
 
 /// Maximum number of labels in a DNS name.
 ///
@@ -70,10 +74,10 @@ pub const MAX_LABS: usize = (MAX_NAME - 1) / 2 + 1;
 
 /// A DNS name where we only have information about the labels.
 ///
-/// [`WireLabels`] are not able to implement all the [`DnsName`]
+/// `WireLabels` are not able to implement all the [`DnsName`]
 /// methods, so this supertrait includes the ones that it can.
 ///
-/// The generic parameter is because [`WireLabels`] can store label
+/// The generic parameter is because `WireLabels` can store label
 /// positions as `u8` or `u16`.
 ///
 pub trait DnsLabels<P> {
@@ -123,19 +127,10 @@ pub trait DnsName: DnsLabels<u8> {
     }
 }
 
-/// Wrapper for panic-free indexing into data from the wire
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct Wire<'w> {
-    wire: &'w [u8],
-}
-
-impl Wire<'_> {
-    fn get(self, pos: usize) -> Result<u8> {
-        self.wire.get(pos).map_or(Err(NameTruncated), |p| Ok(*p))
-    }
-}
-
 pub trait FromWire {
+    /// Reset the name's scratch pad to empty.
+    fn clear(&mut self);
+
     /// Parse a DNS name from wire format.
     ///
     /// To parse a compressed name in a DNS message, the `wire` slice
@@ -148,39 +143,157 @@ pub trait FromWire {
     /// should extend from the start of the name to whatever limit
     /// applies, and `pos` should be zero.
     ///
-    fn from_wire(&mut self, wire: &[u8], mut pos: usize) -> Result<()> {
-        let wire = Wire { wire };
-        let mut max = pos;
-        loop {
-            let llen = match wire.get(pos)? {
-                len @ 0x00..=0x3F => len,
-                wat @ 0x40..=0xBF => return Err(LabelType(wat)),
-                hi @ 0xC0..=0xFF => {
-                    let lo = wire.get(pos + 1)?;
-                    pos = (hi as usize & 0x3F) << 8 | lo as usize;
-                    if let 0xC0..=0xFF = wire.get(pos)? {
-                        return Err(CompressChain);
-                    } else if pos >= max {
-                        return Err(CompressBad);
-                    } else {
-                        max = pos;
-                        continue;
+    /// When parsing succeeds, the return value is the position of the
+    /// next byte after the name.
+    ///
+    fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize>;
+}
+
+pub trait FromText: FromWire {
+    fn from_text(&mut self, text: &[u8]) -> Result<usize>;
+}
+
+/// Wrapper for panic-free indexing into untrusted data
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct Dodgy<'u> {
+    bytes: &'u [u8],
+}
+
+impl Dodgy<'_> {
+    fn get(self, pos: usize) -> Result<u8> {
+        self.bytes.get(pos).map_or(Err(NameTruncated), |p| Ok(*p))
+    }
+
+    fn len(self) -> usize {
+        self.bytes.len()
+    }
+
+    fn fun<F, T>(
+        fun: F,
+        this: &mut T,
+        bytes: &[u8],
+        pos: usize,
+    ) -> Result<usize>
+    where
+        F: Fn(&mut T, Dodgy, usize) -> Result<usize>,
+        T: FromWire,
+    {
+        this.clear();
+        let ret = fun(this, Dodgy { bytes }, pos);
+        if ret.is_err() {
+            this.clear();
+        }
+        ret
+    }
+}
+
+/// Internal helper trait for [`FromWire`]
+///
+trait LabelFromWire: FromWire {
+    fn label_from_wire(
+        &mut self,
+        bytes: Dodgy,
+        pos: usize,
+        llen: u8,
+    ) -> Result<()>;
+}
+
+fn name_from_wire<T>(this: &mut T, wire: Dodgy, mut pos: usize) -> Result<usize>
+where
+    T: LabelFromWire,
+{
+    let mut max = pos;
+    let mut end = pos;
+    loop {
+        let llen = match wire.get(pos)? {
+            len @ 0x00..=0x3F => len,
+            wat @ 0x40..=0xBF => return Err(LabelType(wat)),
+            hi @ 0xC0..=0xFF => {
+                end = std::cmp::max(end, pos + 2);
+                let lo = wire.get(pos + 1)?;
+                pos = (hi as usize & 0x3F) << 8 | lo as usize;
+                if let 0xC0..=0xFF = wire.get(pos)? {
+                    return Err(CompressChain);
+                } else if max <= pos {
+                    return Err(CompressBad);
+                } else {
+                    max = pos;
+                    continue;
+                }
+            }
+        };
+        this.label_from_wire(wire, pos, llen)?;
+        pos += 1 + llen as usize;
+        end = std::cmp::max(end, pos);
+        if llen == 0 {
+            return Ok(end);
+        }
+    }
+}
+
+fn name_from_text<T>(this: &mut T, text: Dodgy, mut pos: usize) -> Result<usize>
+where
+    T: LabelFromWire,
+{
+    type ScratchLabel = ScratchPad<u8, MAX_LLEN>;
+    let mut label = ScratchLabel::new();
+    let mut root = 0;
+    let mut sub = 0;
+
+    let mut append_label = |what: Option<&mut ScratchLabel>| {
+        if let Some(label) = what {
+            let wire = Dodgy { bytes: label.as_slice() };
+            let ret = this.label_from_wire(wire, 0, label.len() as u8);
+            root += label.is_empty() as usize;
+            sub += !label.is_empty() as usize;
+            label.clear();
+            ret
+        } else if root > 1 || (root > 0 && sub > 0) || (root == 0 && sub == 0) {
+            Err(NameSyntax)
+        } else if root == 0 {
+            this.label_from_wire(Dodgy { bytes: &[] }, 0, 0)
+        } else {
+            Ok(())
+        }
+    };
+
+    while let Ok(byte) = text.get(pos) {
+        match byte {
+            // RFC 1035 zone file special characters terminate the name
+            b'\n' | b'\r' | b'\t' | b' ' | b';' | b'(' | b')' => break,
+            // RFC 1035 suggests that a label can be a quoted string,
+            // but it seems better to treat that as an error
+            b'"' => return Err(NameSyntax),
+            // RFC 1035 peculiar decimal (not octal!) escapes
+            b'\\' => {
+                pos += 1;
+                let mut num = None;
+                for _ in 0..=2 {
+                    if let Ok(byte @ b'0'..=b'9') = text.get(pos) {
+                        let digit = (byte - b'0') as u16;
+                        num = Some(num.unwrap_or(0) * 10 + digit);
+                        pos += 1;
                     }
                 }
-            };
-            self.parsed_label(wire, pos, llen)?;
-            if llen > 0 {
-                pos += 1 + llen as usize;
-            } else {
-                return Ok(());
+                if let Some(code) = num {
+                    let byte = code.try_into().or(Err(EscapeBad(code)))?;
+                    label.push(byte)?;
+                } else {
+                    label.push(text.get(pos)?)?;
+                }
             }
+            // label delimiter
+            b'.' => append_label(Some(&mut label))?,
+            // everything else
+            _ => label.push(byte)?,
         }
     }
 
-    /// Add a label to the work pad, located on the `wire` at the
-    /// given position with the given length.
-    fn parsed_label(&mut self, wire: Wire, lpos: usize, llen: u8)
-        -> Result<()>;
+    // last label lacked a trailing dot
+    if !label.is_empty() {
+        append_label(Some(&mut label))?;
+    }
+    append_label(None).and(Ok(pos))
 }
 
 /// Helper function to get a slice covering a label

@@ -13,18 +13,16 @@ pub enum Error {
     CompressBad,
     #[error("DNS name has chained compression pointers")]
     CompressChain,
-    #[error("arithmetic overflow")]
-    FromInt(#[from] std::num::TryFromIntError),
-    #[error("DNS name has an oversize label")]
-    LabelLength,
+    #[error("Character code {0} is too large")]
+    EscapeBad(u16),
     #[error("unsupported label type {0} (see RFC 6891)")]
     LabelType(u8),
-    #[error("DNS name has too many labels")]
-    NameLabels,
     #[error("DNS name is too long")]
     NameLength,
-    #[error("domain name contains \"")]
-    NameQuotes,
+    #[error("Syntax error in domain name")]
+    NameSyntax,
     #[error("DNS name is truncated")]
     NameTruncated,
+    #[error("DNS name does not fit in WireLabels<u8>")]
+    WideWire,
 }

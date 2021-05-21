@@ -20,11 +20,6 @@ impl ScratchName {
     pub fn new() -> Self {
         ScratchName { lpos: ScratchPad::new(), name: ScratchPad::new() }
     }
-
-    pub fn clear(&mut self) {
-        self.lpos.clear();
-        self.name.clear();
-    }
 }
 
 impl DnsLabels<u8> for ScratchName {
@@ -52,26 +47,37 @@ impl DnsName for ScratchName {
     }
 }
 
-impl FromWire for ScratchName {
-    fn parsed_label(
-        &mut self,
-        wire: Wire,
-        rpos: usize,
-        llen: u8,
-    ) -> Result<()> {
-        let wpos = self.name.len().try_into()?;
-        self.lpos.push(wpos)?;
-        self.name.push(llen)?;
-        for i in 1..=llen as usize {
-            self.name.push(wire.get(rpos + i)?.to_ascii_lowercase());
-        }
-        Ok(())
+impl std::fmt::Display for ScratchName {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.to_text(f)
     }
 }
 
-impl<'n> std::fmt::Display for ScratchName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_text(f)
+impl FromWire for ScratchName {
+    fn clear(&mut self) {
+        self.lpos.clear();
+        self.name.clear();
+    }
+
+    fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize> {
+        Dodgy::fun(name_from_wire, self, wire, pos)
+    }
+}
+
+impl LabelFromWire for ScratchName {
+    fn label_from_wire(
+        &mut self,
+        wire: Dodgy,
+        rpos: usize,
+        llen: u8,
+    ) -> Result<()> {
+        let wpos = self.name.len().try_into().or(Err(NameLength))?;
+        self.lpos.push(wpos)?;
+        self.name.push(llen)?;
+        for i in 1..=llen as usize {
+            self.name.push(wire.get(rpos + i)?.to_ascii_lowercase())?;
+        }
+        Ok(())
     }
 }
 

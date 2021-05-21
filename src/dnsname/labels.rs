@@ -38,11 +38,6 @@ where
     pub fn new() -> Self {
         WireLabels { lpos: ScratchPad::new(), nlen: 0 }
     }
-
-    pub fn clear(&mut self) {
-        self.lpos.clear();
-        self.nlen = 0;
-    }
 }
 
 impl<P> DnsLabels<P> for WireLabels<P> {
@@ -60,29 +55,37 @@ impl<P> DnsLabels<P> for WireLabels<P> {
 }
 
 // The trait bounds on the generic implementation are a pain,
-// and we only need it to be instantiated at two types.
+// and we only need them to be instantiated at two types.
 
-macro_rules! fn_parsed_label {
-    () => {
-        fn parsed_label(
-            &mut self,
-            _: Wire,
-            pos: usize,
-            llen: u8,
-        ) -> Result<()> {
-            self.lpos.push(pos.try_into()?)?;
-            match self.nlen + 1 + llen as usize {
-                long if long > MAX_NAME => Err(Error::NameLength),
-                short => Ok(self.nlen = short),
+macro_rules! impl_from_wire {
+    ($p:ty) => {
+        impl FromWire for WireLabels<$p> {
+            fn clear(&mut self) {
+                self.lpos.clear();
+                self.nlen = 0;
+            }
+
+            fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize> {
+                Dodgy::fun(name_from_wire, self, wire, pos)
+            }
+        }
+
+        impl LabelFromWire for WireLabels<$p> {
+            fn label_from_wire(
+                &mut self,
+                _: Dodgy,
+                pos: usize,
+                llen: u8,
+            ) -> Result<()> {
+                self.lpos.push(pos.try_into().or(Err(Error::WideWire))?)?;
+                match self.nlen + 1 + llen as usize {
+                    long if long > MAX_NAME => Err(Error::NameLength),
+                    short => Ok(self.nlen = short),
+                }
             }
         }
     };
 }
 
-impl FromWire for WireLabels<u8> {
-    fn_parsed_label! {}
-}
-
-impl FromWire for WireLabels<u16> {
-    fn_parsed_label! {}
-}
+impl_from_wire!(u8);
+impl_from_wire!(u16);

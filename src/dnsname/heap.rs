@@ -11,10 +11,7 @@
 //!
 //!   * it only uses a single word to refer to the allocation.
 
-use crate::dnsname::labels::*;
 use crate::dnsname::*;
-use crate::error::*;
-use std::convert::TryFrom;
 use std::marker::PhantomData;
 
 /// A DNS name owned and allocated on the heap
@@ -27,8 +24,8 @@ use std::marker::PhantomData;
 /// just big enough for that). The last label is the root zone, so its
 /// position is the length of the name minus one.
 ///
-/// The maximum heap allocation is [`dnsname::MAX_NAME`] plus
-/// [`dnsname::MAX_LABS`] plus a byte for the label count, totalling
+/// The maximum heap allocation is [`MAX_NAME`] plus
+/// [`MAX_LABS`] plus a byte for the label count, totalling
 /// 384 bytes.
 ///
 /// A `HeapName` is never empty.
@@ -39,7 +36,7 @@ use std::marker::PhantomData;
 /// the layout is correct, for instance, the label posisions must be
 /// within the name.
 ///
-///   * the allocation size matches the [`HeapLen`]
+///   * the allocation size matches the `HeapLen`
 ///
 ///   * it is non-null, properly aligned, and fully initialized
 ///
@@ -103,6 +100,12 @@ impl DnsName for HeapName {
     }
 }
 
+impl std::fmt::Display for HeapName {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.to_text(f)
+    }
+}
+
 /// Calculate the allocation size for a [`HeapName`],
 ///
 /// This is just a small extension to the [`DnsLabels`] trait,
@@ -118,65 +121,6 @@ impl<P, N: DnsLabels<P>> HeapLen<P> for N {}
 
 impl From<ScratchName> for HeapName {
     fn from(scratch: ScratchName) -> HeapName {
-        unimplemented!()
-    }
-}
-
-impl TryFrom<&str> for HeapName {
-    type Error = Error;
-
-    fn try_from(text: &str) -> Result<HeapName> {
-        let mut v = Vec::new();
-
-        fn label(v: &mut Vec<u8>, pos: usize) -> Result<usize> {
-            if let len @ 0..=0x3F = v.len() - pos {
-                v[pos] = len as u8;
-                v.push(0);
-                Ok(v.len() - 1)
-            } else {
-                Err(LabelLength)
-            }
-        }
-
-        let mut pos = label(&mut v, 0)?;
-        let mut it = text.as_bytes().iter().peekable();
-        while let Some(&byte) = it.next() {
-            match byte {
-                // RFC 1035 zone file special characters
-                b'\n' | b'\r' | b'\t' | b' ' | b';' | b'(' | b')' => break,
-                // RFC 1035 suggests that a label can be a quoted
-                // string; seems better to treat that as an error
-                b'"' => return Err(NameQuotes),
-                // RFC 1035 peculiar decimal escapes
-                b'\\' => match it.next() {
-                    Some(&digit @ b'0'..=b'9') => {
-                        let mut n = (digit - b'0') as u16;
-                        if let Some(&&digit @ b'0'..=b'9') = it.peek() {
-                            n = n * 10 + (digit - b'0') as u16;
-                            it.next();
-                        }
-                        if let Some(&&digit @ b'0'..=b'9') = it.peek() {
-                            n = n * 10 + (digit - b'0') as u16;
-                            it.next();
-                        }
-                        let byte = u8::try_from(n)?;
-                        v.push(byte);
-                    }
-                    Some(&byte) => v.push(byte),
-                    None => return Err(NameTruncated),
-                },
-                // label delimiter
-                b'.' => pos = label(&mut v, pos)?,
-                // RFC 4034 canonical case
-                b'A'..=b'Z' => v.push(byte - b'A' + b'a'),
-                // everything else
-                _ => v.push(byte),
-            }
-        }
-        if pos < v.len() - 1 {
-            label(&mut v, pos)?;
-        }
-
         unimplemented!()
     }
 }
