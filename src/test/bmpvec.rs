@@ -72,9 +72,7 @@ mod test {
 
     #[test]
     fn test() {
-        eprintln!("rand");
         let v: Vec<u8> = repeat_with(|| fastrand::u8(..)).take(1000).collect();
-        eprintln!("exercise");
         crate::test::bmpvec::exercise(&v[..]);
     }
 }

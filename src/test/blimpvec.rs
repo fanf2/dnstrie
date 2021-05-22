@@ -124,15 +124,8 @@ where
     T: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_empty() {
-            write!(f, "BlimpVec {{}}")
-        } else {
-            writeln!(f, "BlimpVec {{")?;
-            for (pos, val) in self.iter() {
-                writeln!(f, "{:4} = {:?},", pos, val)?;
-            }
-            write!(f, "}}")
-        }
+        write!(f, "BlimpVec")?;
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 

@@ -343,15 +343,8 @@ where
     T: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_empty() {
-            write!(f, "BmpVec {{}}")
-        } else {
-            writeln!(f, "BmpVec {{")?;
-            for (pos, val) in self {
-                writeln!(f, "{:4} = {:?},", pos, val)?;
-            }
-            write!(f, "}}")
-        }
+        write!(f, "BmpVec")?;
+        f.debug_map().entries(self).finish()
     }
 }
 
@@ -507,19 +500,21 @@ mod bmp {
 
     impl std::fmt::Debug for Bmp {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "Bmp({:064b})", self.0)
+            f.debug_tuple("Bmp")
+                .field(&format_args!("{:064b})", self.0))
+                .finish()
         }
     }
 
     impl std::fmt::Debug for Bit {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "Bit({})", self.0.trailing_zeros())
+            f.debug_tuple("Bit").field(&self.0.trailing_zeros()).finish()
         }
     }
 
     impl std::fmt::Debug for Mask {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "Mask({})", self.0.trailing_ones())
+            f.debug_tuple("Mask").field(&self.0.trailing_ones()).finish()
         }
     }
 }
