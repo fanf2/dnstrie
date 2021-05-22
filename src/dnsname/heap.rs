@@ -94,9 +94,26 @@ impl DnsName for HeapName {
     }
 }
 
+impl std::fmt::Debug for HeapName {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("HeapName")
+            .field("lpos", &self.lpos())
+            .field("name", &self.name())
+            .finish()
+    }
+}
+
 impl std::fmt::Display for HeapName {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.to_text(f)
+    }
+}
+
+impl Eq for HeapName {}
+
+impl<Other: DnsName> PartialEq<Other> for HeapName {
+    fn eq(&self, other: &Other) -> bool {
+        self.name() == other.name()
     }
 }
 

@@ -38,6 +38,14 @@ impl std::fmt::Display for ScratchName {
     }
 }
 
+impl Eq for ScratchName {}
+
+impl<Other: DnsName> PartialEq<Other> for ScratchName {
+    fn eq(&self, other: &Other) -> bool {
+        self.name() == other.name()
+    }
+}
+
 impl ScratchName {
     #[inline(always)]
     pub fn new() -> Self {

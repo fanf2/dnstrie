@@ -34,7 +34,9 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = std::any::type_name::<T>();
-        write!(f, "ScratchPad<{}>({:?})", t, self.as_slice())
+        f.debug_struct(&format!("ScratchPad<{}, {}>", t, SIZE))
+            .field("as_slice", &self.as_slice())
+            .finish()
     }
 }
 
