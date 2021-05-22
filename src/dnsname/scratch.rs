@@ -51,14 +51,14 @@ impl ScratchName {
         err
     }
 
-    pub fn from_text(&mut self, text: &[u8]) -> Result<usize> {
-        let dodgy = Dodgy { bytes: text };
-        self.dodgy_from_text(dodgy).map_err(|err| self.clear_err(err))
-    }
-
     pub fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize> {
         let dodgy = Dodgy { bytes: wire };
         self.dodgy_from_wire(dodgy, pos).map_err(|err| self.clear_err(err))
+    }
+
+    pub fn from_text(&mut self, text: &[u8]) -> Result<usize> {
+        let dodgy = Dodgy { bytes: text };
+        self.dodgy_from_text(dodgy).map_err(|err| self.clear_err(err))
     }
 
     fn add_label(&mut self, dodgy: Dodgy, rpos: usize, llen: u8) -> Result<()> {
@@ -69,6 +69,37 @@ impl ScratchName {
             self.name.push(dodgy.get(rpos + i)?.to_ascii_lowercase())?;
         }
         Ok(())
+    }
+
+    fn dodgy_from_wire(&mut self, dodgy: Dodgy, pos: usize) -> Result<usize> {
+        let mut pos = pos;
+        let mut max = pos;
+        let mut end = pos;
+        loop {
+            let llen = match dodgy.get(pos)? {
+                len @ 0x00..=0x3F => len,
+                wat @ 0x40..=0xBF => return Err(LabelType(wat)),
+                hi @ 0xC0..=0xFF => {
+                    end = std::cmp::max(end, pos + 2);
+                    let lo = dodgy.get(pos + 1)?;
+                    pos = (hi as usize & 0x3F) << 8 | lo as usize;
+                    if let 0xC0..=0xFF = dodgy.get(pos)? {
+                        return Err(CompressChain);
+                    } else if max <= pos {
+                        return Err(CompressBad);
+                    } else {
+                        max = pos;
+                        continue;
+                    }
+                }
+            };
+            self.add_label(dodgy, pos + 1, llen)?;
+            pos += 1 + llen as usize;
+            end = std::cmp::max(end, pos);
+            if llen == 0 {
+                return Ok(end);
+            }
+        }
     }
 
     fn dodgy_from_text(&mut self, dodgy: Dodgy) -> Result<usize> {
@@ -140,37 +171,6 @@ impl ScratchName {
             check_or_add(Some(&mut label))?;
         }
         check_or_add(None).and(Ok(pos))
-    }
-
-    fn dodgy_from_wire(&mut self, dodgy: Dodgy, pos: usize) -> Result<usize> {
-        let mut pos = pos;
-        let mut max = pos;
-        let mut end = pos;
-        loop {
-            let llen = match dodgy.get(pos)? {
-                len @ 0x00..=0x3F => len,
-                wat @ 0x40..=0xBF => return Err(LabelType(wat)),
-                hi @ 0xC0..=0xFF => {
-                    end = std::cmp::max(end, pos + 2);
-                    let lo = dodgy.get(pos + 1)?;
-                    pos = (hi as usize & 0x3F) << 8 | lo as usize;
-                    if let 0xC0..=0xFF = dodgy.get(pos)? {
-                        return Err(CompressChain);
-                    } else if max <= pos {
-                        return Err(CompressBad);
-                    } else {
-                        max = pos;
-                        continue;
-                    }
-                }
-            };
-            self.add_label(dodgy, pos + 1, llen)?;
-            pos += 1 + llen as usize;
-            end = std::cmp::max(end, pos);
-            if llen == 0 {
-                return Ok(end);
-            }
-        }
     }
 }
 
