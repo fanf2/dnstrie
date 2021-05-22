@@ -30,11 +30,6 @@ impl DnsName for ScratchName {
     fn nlen(&self) -> usize {
         self.name.len()
     }
-
-    fn label(&self, lab: usize) -> Option<&[u8]> {
-        let pos = *self.lpos().get(lab)?;
-        Some(slice_label(self.name(), pos as usize))
-    }
 }
 
 impl std::fmt::Display for ScratchName {

@@ -86,11 +86,13 @@ pub trait DnsName {
 
     /// A slice covering a label's length byte and its text
     ///
-    /// Returns `None` if the label number is out of range.
+    /// Returns `None` if the label is out of range.
     ///
     fn label(&self, lab: usize) -> Option<&[u8]> {
-        let pos = *self.lpos().get(lab)? as usize;
-        Some(slice_label(self.name(), pos))
+        let start = *self.lpos().get(lab)? as usize;
+        let llen = *self.name().get(start)? as usize;
+        let end = start + llen;
+        self.name().get(start..=end)
     }
 
     fn to_text(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -115,22 +117,4 @@ pub trait DnsName {
         }
         Ok(())
     }
-}
-
-/// Helper function to get a slice covering a label
-///
-/// The slice covers both the length byte and the label text.
-///
-/// This is for use with names that have been parsed.
-///
-/// # Panics
-///
-/// Panics if the label extends past the end of the name.
-///
-/// Doesn't check the high bits of the label length byte.
-///
-fn slice_label(name: &[u8], start: usize) -> &[u8] {
-    let llen = name[start] as usize;
-    let end = start + llen;
-    &name[start..=end]
 }
