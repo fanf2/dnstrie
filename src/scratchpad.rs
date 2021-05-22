@@ -22,13 +22,9 @@ pub struct ScratchPad<T, const SIZE: usize> {
 }
 
 impl<T, const SIZE: usize> Default for ScratchPad<T, SIZE> {
+    #[inline(always)]
     fn default() -> Self {
-        // SAFETY: `assume_init()` is safe because an array of
-        // `MaybeUninit`s does not require initialization.
-        ScratchPad {
-            uninit: unsafe { MaybeUninit::uninit().assume_init() },
-            end: 0,
-        }
+        Self::new()
     }
 }
 
@@ -46,7 +42,12 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
     /// Create a new empty scratch pad.
     #[inline(always)]
     pub fn new() -> Self {
-        Default::default()
+        // SAFETY: `assume_init()` is safe because an array of
+        // `MaybeUninit`s does not require initialization.
+        ScratchPad {
+            uninit: unsafe { MaybeUninit::uninit().assume_init() },
+            end: 0,
+        }
     }
 
     /// Reset the scratch pad to empty.

@@ -41,9 +41,9 @@ use std::marker::PhantomData;
 ///
 ///   * it is non-null, properly aligned, and fully initialized
 ///
-/// This safety requirement is established by the constructors,
-/// `impl FromWire` and `impl From<ScratchName>`. After that point,
-/// the name is immutable so it remains safe.
+/// This safety requirement is established by the constructor,
+/// `impl From<ScratchName>`. After that point, the name is
+/// immutable so it remains safe.
 ///
 pub struct HeapName {
     // We treat this memory as immutable except when it is dropped.
@@ -66,7 +66,7 @@ unsafe impl Send for HeapName {}
 /// SAFETY: the data in a [`HeapName`] is unaliased.
 unsafe impl Sync for HeapName {}
 
-impl DnsLabels<u8> for HeapName {
+impl DnsName for HeapName {
     fn labs(&self) -> usize {
         // SAFETY: see [`HeapName`] under "Safety"
         unsafe { self.mem.read() as usize }
@@ -80,13 +80,6 @@ impl DnsLabels<u8> for HeapName {
         }
     }
 
-    fn nlen(&self) -> usize {
-        // SAFETY: see [`HeapName`] under "Safety"
-        unsafe { self.mem.add(self.labs()).read() as usize + 1 }
-    }
-}
-
-impl DnsName for HeapName {
     fn name(&self) -> &[u8] {
         // SAFETY: see [`HeapName`] under "Safety"
         unsafe {
@@ -95,9 +88,9 @@ impl DnsName for HeapName {
         }
     }
 
-    fn label(&self, lab: usize) -> Option<&[u8]> {
-        let pos = *self.lpos().get(lab)? as usize;
-        Some(slice_label(self.name(), pos))
+    fn nlen(&self) -> usize {
+        // SAFETY: see [`HeapName`] under "Safety"
+        unsafe { self.mem.add(self.labs()).read() as usize + 1 }
     }
 }
 
@@ -109,16 +102,16 @@ impl std::fmt::Display for HeapName {
 
 /// Calculate the allocation size for a [`HeapName`],
 ///
-/// This is just a small extension to the [`DnsLabels`] trait,
+/// This is just a small extension to the [`DnsName`] trait,
 /// specific to the needs of a [`HeapName`].
 ///
-trait HeapLen<P>: DnsLabels<P> {
+trait HeapLen: DnsName {
     fn heap_len(&self) -> usize {
         1 + self.labs() + self.nlen()
     }
 }
 
-impl<P, N> HeapLen<P> for N where N: DnsLabels<P> {}
+impl<N> HeapLen for N where N: DnsName {}
 
 impl From<ScratchName> for HeapName {
     fn from(scratch: ScratchName) -> HeapName {
@@ -150,7 +143,7 @@ impl TryFrom<&str> for HeapName {
         if end == text.len() {
             Ok(scratch.into())
         } else {
-            Err(NameSyntax)
+            Err(NameTrailing)
         }
     }
 }

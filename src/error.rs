@@ -15,12 +15,18 @@ pub enum Error {
     CompressChain,
     #[error("Character code {0} is too large")]
     EscapeBad(u16),
-    #[error("unsupported label type {0:#X} (see RFC 6891)")]
+    #[error("Label length is inconcievable")]
+    LabelLengthWat,
+    #[error("Unsupported label type {0:#X}")]
     LabelType(u8),
     #[error("DNS name is too long")]
     NameLength,
+    #[error("DNS name length is inconcievable")]
+    NameLengthWat,
     #[error("Syntax error in domain name")]
     NameSyntax,
+    #[error("DNS name has trailing junk")]
+    NameTrailing,
     #[error("DNS name is truncated")]
     NameTruncated,
     #[error("DNS name is too long for its buffer")]
