@@ -47,14 +47,12 @@
 //! We use [`ScratchPad`][crate::scratchpad::ScratchPad]s to make
 //! these reformatted names without allocating.
 
-pub mod heap;
-pub use self::heap::*;
-
-pub mod scratch;
-pub use self::scratch::*;
-
 use crate::error::Error::*;
 use crate::error::{Error, Result};
+use core::cmp::Ordering;
+
+pub use self::heap::*;
+pub use self::scratch::*;
 
 /// Maximum length of a DNS name, in octets on the wire.
 pub const MAX_NAME: usize = 255;
@@ -84,23 +82,34 @@ pub trait DnsName {
     /// The length of the name in uncompressed wire format
     fn nlen(&self) -> usize;
 
-    /// A slice covering a label's length byte and its text
+    /// A slice covering a label's text, counting from 0 on the
+    /// left.
     ///
     /// Returns `None` if the label is out of range.
     ///
     fn label(&self, lab: usize) -> Option<&[u8]> {
-        let start = *self.lpos().get(lab)? as usize;
-        let llen = *self.name().get(start)? as usize;
-        let end = start + llen;
-        self.name().get(start..=end)
+        let pos = *self.lpos().get(lab)? as usize;
+        let len = *self.name().get(pos)? as usize;
+        self.name().get((pos + 1)..=(pos + len))
+    }
+
+    /// A slice covering a label's text, counting from the right
+    /// where 0 is the root zone.
+    ///
+    /// Returns `None` if the label is out of range.
+    ///
+    fn rlabel(&self, lab: usize) -> Option<&[u8]> {
+        match self.labs() - 1 {
+            root if root >= lab => self.label(root - lab),
+            _ => None,
+        }
     }
 
     fn to_text(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let labs = self.labs();
         for lab in 0..labs {
             let label = self.label(lab).ok_or(std::fmt::Error)?;
-            let text = &label[1..];
-            for &byte in text.iter() {
+            for &byte in label.iter() {
                 match byte {
                     b'*' | b'-' | b'_' | // permitted punctuation
                     b'0'..=b'9' |
@@ -117,4 +126,53 @@ pub trait DnsName {
         }
         Ok(())
     }
+
+    fn name_cmp<Other>(&self, other: &Other) -> Ordering
+    where
+        Other: DnsName,
+    {
+        for lab in 0.. {
+            let left = &self.rlabel(lab);
+            let right = &other.rlabel(lab);
+            match left.cmp(right) {
+                Ordering::Equal if left.is_none() && right.is_none() => break,
+                Ordering::Equal => continue,
+                ne => return ne,
+            }
+        }
+        Ordering::Equal
+    }
 }
+
+macro_rules! impl_dns_name {
+    ($name:ty) => {
+        impl Eq for $name {}
+
+        impl<Other: DnsName> PartialEq<Other> for $name {
+            fn eq(&self, other: &Other) -> bool {
+                self.name() == other.name()
+            }
+        }
+
+        impl Ord for $name {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.name_cmp(other)
+            }
+        }
+
+        impl<Other: DnsName> PartialOrd<Other> for $name {
+            fn partial_cmp(&self, other: &Other) -> Option<Ordering> {
+                Some(self.name_cmp(other))
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                self.to_text(f)
+            }
+        }
+    };
+}
+
+pub mod heap;
+pub mod scratch;

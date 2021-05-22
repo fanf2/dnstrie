@@ -6,6 +6,7 @@
 
 use crate::dnsname::*;
 use crate::scratchpad::*;
+use core::cmp::Ordering;
 use core::convert::TryInto;
 
 #[derive(Debug, Default)]
@@ -13,6 +14,8 @@ pub struct ScratchName {
     lpos: ScratchPad<u8, MAX_LABS>,
     name: ScratchPad<u8, MAX_NAME>,
 }
+
+impl_dns_name!(ScratchName);
 
 impl DnsName for ScratchName {
     fn labs(&self) -> usize {
@@ -29,20 +32,6 @@ impl DnsName for ScratchName {
 
     fn nlen(&self) -> usize {
         self.name.len()
-    }
-}
-
-impl std::fmt::Display for ScratchName {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.to_text(f)
-    }
-}
-
-impl Eq for ScratchName {}
-
-impl<Other: DnsName> PartialEq<Other> for ScratchName {
-    fn eq(&self, other: &Other) -> bool {
-        self.name() == other.name()
     }
 }
 
@@ -118,7 +107,7 @@ impl ScratchName {
                 b'"' => return Err(NameSyntax),
                 // RFC 1035 zone file special characters terminate the name
                 b'\n' | b'\r' | b'\t' | b' ' | b';' | b'(' | b')' => {
-                    pos -= 1; // unget
+                    pos -= 1; // unget special character
                     break;
                 }
                 // RFC 1035 peculiar decimal (not octal!) escapes

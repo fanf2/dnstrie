@@ -66,6 +66,8 @@ unsafe impl Send for HeapName {}
 /// SAFETY: the data in a [`HeapName`] is unaliased.
 unsafe impl Sync for HeapName {}
 
+impl_dns_name!(HeapName);
+
 impl DnsName for HeapName {
     fn labs(&self) -> usize {
         // SAFETY: see [`HeapName`] under "Safety"
@@ -100,20 +102,6 @@ impl std::fmt::Debug for HeapName {
             .field("lpos", &self.lpos())
             .field("name", &self.name())
             .finish()
-    }
-}
-
-impl std::fmt::Display for HeapName {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.to_text(f)
-    }
-}
-
-impl Eq for HeapName {}
-
-impl<Other: DnsName> PartialEq<Other> for HeapName {
-    fn eq(&self, other: &Other) -> bool {
-        self.name() == other.name()
     }
 }
 
