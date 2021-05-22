@@ -37,7 +37,8 @@ where
     T: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}({:?})", std::any::type_name::<Self>(), self.as_slice())
+        let t = std::any::type_name::<T>();
+        write!(f, "ScratchPad<{}>({:?})", t, self.as_slice())
     }
 }
 
@@ -73,7 +74,7 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
     }
 
     fn get_mut(&mut self, pos: usize) -> Result<*mut T> {
-        Ok(self.uninit.get_mut(pos).ok_or(Error::NameLength)?.as_mut_ptr())
+        Ok(self.uninit.get_mut(pos).ok_or(Error::ScratchOverflow)?.as_mut_ptr())
     }
 
     pub fn append(&mut self, elems: &[T]) -> Result<()> {

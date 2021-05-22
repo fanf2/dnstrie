@@ -15,7 +15,7 @@ pub enum Error {
     CompressChain,
     #[error("Character code {0} is too large")]
     EscapeBad(u16),
-    #[error("unsupported label type {0} (see RFC 6891)")]
+    #[error("unsupported label type {0:#X} (see RFC 6891)")]
     LabelType(u8),
     #[error("DNS name is too long")]
     NameLength,
@@ -23,6 +23,8 @@ pub enum Error {
     NameSyntax,
     #[error("DNS name is truncated")]
     NameTruncated,
+    #[error("DNS name is too long for its buffer")]
+    ScratchOverflow,
     #[error("DNS name does not fit in WireLabels<u8>")]
     WideWire,
 }
