@@ -81,7 +81,7 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
         let len = elems.len();
         let src = elems.as_ptr();
         let dst = self.get_mut(self.end)?;
-        self.get_mut(self.end + len)?;
+        self.get_mut(self.end + len - 1)?;
         // SAFETY: bounds have been checked; the origins of the pointers
         // mean they don't overlap and alignment and nullity are OK.
         unsafe { dst.copy_from_nonoverlapping(src, len) };
