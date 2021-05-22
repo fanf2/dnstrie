@@ -227,7 +227,9 @@ impl<T> BmpVec<T> {
     /// convert the raw parts back using [`BmpVec::from_raw_parts()`]
     ///
     pub unsafe fn into_raw_parts(self) -> (u64, *mut T) {
-        (self.bmp.into_raw_parts(), self.ptr)
+        let (bmp, ptr) = (self.bmp.into_raw_parts(), self.ptr);
+        std::mem::forget(self); // avoid double free
+        (bmp, ptr)
     }
 
     /// Expand a `BmpVec` into a bitmap and a slice of elements
