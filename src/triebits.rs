@@ -26,9 +26,10 @@ const fn gen_byte_to_bits() -> [u16; 256] {
     let mut bit_two = SHIFT_BITMAP;
     let mut escaping = true;
     let mut table = [0u16; 256];
-    let mut i = 0;
-    while i < 256 {
-        match i as u8 {
+    let mut byte = 0;
+    loop {
+        let i = byte as usize;
+        match byte {
             // common characters
             b'-'..=b'9' | b'_'..=b'z' => {
                 escaping = false;
@@ -36,7 +37,7 @@ const fn gen_byte_to_bits() -> [u16; 256] {
                 table[i] = bit_one as u16;
             }
             // map upper case to lower case
-            byte @ b'A'..=b'Z' => {
+            b'A'..=b'Z' => {
                 table[i] = (
                     (bit_one + 1) + // bump past escape character
                      (b'a' - b'_') + // and skip non-letters
@@ -55,9 +56,34 @@ const fn gen_byte_to_bits() -> [u16; 256] {
                 bit_two += 1;
             }
         }
-        i += 1;
+        if byte == 255 {
+            return table;
+        } else {
+            byte += 1;
+        }
     }
-    table
+}
+
+// 48*48 bytes is less than 2.5KB
+pub const BITS_TO_BYTE: [[u8; 48]; 48] = gen_bits_to_byte();
+
+const fn gen_bits_to_byte() -> [[u8; 48]; 48] {
+    let mut table = [[0u8; 48]; 48];
+    let mut byte = 0;
+    loop {
+        if byte == b'A' {
+            byte += 26;
+        }
+        let bits = BYTE_TO_BITS[byte as usize] as usize;
+        let bit_one = bits & 0xFF;
+        let bit_two = bits >> 8;
+        table[bit_one][bit_two] = byte;
+        if byte == 255 {
+            return table;
+        } else {
+            byte += 1;
+        }
+    }
 }
 
 #[cfg(test)]
