@@ -160,23 +160,21 @@ struct Dodgy<'u> {
     bytes: &'u [u8],
 }
 
+type DodgyFun<T> = fn(&mut T, Dodgy, usize) -> Result<usize>;
+
 impl Dodgy<'_> {
     fn get(self, pos: usize) -> Result<u8> {
         self.bytes.get(pos).map_or(Err(NameTruncated), |p| Ok(*p))
     }
 
-    fn len(self) -> usize {
-        self.bytes.len()
-    }
-
-    fn fun<F, T>(
-        fun: F,
+    #[inline(always)]
+    fn fun<T>(
+        fun: DodgyFun<T>,
         this: &mut T,
         bytes: &[u8],
         pos: usize,
     ) -> Result<usize>
     where
-        F: Fn(&mut T, Dodgy, usize) -> Result<usize>,
         T: FromWire,
     {
         this.clear();
@@ -223,7 +221,7 @@ where
                 }
             }
         };
-        this.label_from_wire(wire, pos, llen)?;
+        this.label_from_wire(wire, pos + 1, llen)?;
         pos += 1 + llen as usize;
         end = std::cmp::max(end, pos);
         if llen == 0 {
@@ -259,6 +257,7 @@ where
     };
 
     while let Ok(byte) = text.get(pos) {
+        pos += 1;
         match byte {
             // RFC 1035 zone file special characters terminate the name
             b'\n' | b'\r' | b'\t' | b' ' | b';' | b'(' | b')' => break,
@@ -267,7 +266,6 @@ where
             b'"' => return Err(NameSyntax),
             // RFC 1035 peculiar decimal (not octal!) escapes
             b'\\' => {
-                pos += 1;
                 let mut num = None;
                 for _ in 0..=2 {
                     if let Ok(byte @ b'0'..=b'9') = text.get(pos) {
@@ -281,6 +279,7 @@ where
                     label.push(byte)?;
                 } else {
                     label.push(text.get(pos)?)?;
+                    pos += 1;
                 }
             }
             // label delimiter

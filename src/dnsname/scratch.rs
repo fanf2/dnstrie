@@ -53,6 +53,12 @@ impl std::fmt::Display for ScratchName {
     }
 }
 
+impl FromText for ScratchName {
+    fn from_text(&mut self, text: &[u8]) -> Result<usize> {
+        Dodgy::fun(name_from_text, self, text, 0)
+    }
+}
+
 impl FromWire for ScratchName {
     fn clear(&mut self) {
         self.lpos.clear();
@@ -74,16 +80,10 @@ impl LabelFromWire for ScratchName {
         let wpos = self.name.len().try_into().or(Err(NameLength))?;
         self.lpos.push(wpos)?;
         self.name.push(llen)?;
-        for i in 1..=llen as usize {
+        for i in 0..llen as usize {
             self.name.push(wire.get(rpos + i)?.to_ascii_lowercase())?;
         }
         Ok(())
-    }
-}
-
-impl FromText for ScratchName {
-    fn from_text(&mut self, text: &[u8]) -> Result<usize> {
-        Dodgy::fun(name_from_text, self, text, 0)
     }
 }
 
