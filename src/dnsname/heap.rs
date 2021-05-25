@@ -160,8 +160,12 @@ mod test {
 
     #[test]
     fn test() -> Result<()> {
+        assert_eq!(".", format!("{}", HeapName::try_from(".")?));
         let text = "dotat.at";
         let name = HeapName::try_from(text)?;
+        assert_eq!(text, format!("{}", name));
+        let text2 = "dotat.at.";
+        let name = HeapName::try_from(text2)?;
         assert_eq!(text, format!("{}", name));
         Ok(())
     }
