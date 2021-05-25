@@ -4,13 +4,15 @@
 //! This is an append-only fixed-size memory area that avoids
 //! initializing the elements before they are added.
 //!
-//! It can be cleared (reset to empty) and re-used.
+//! It can be cleared (reset to empty) and re-used. Rust prevents us
+//! from muddling up the old and new contents of a `ScratchPad`, because
+//! we can't clear it while we have a reference to a slice of its contents.
 //!
 //! If an append causes an overflow, [`Error::NameLength`] is returned,
-//! which is suitable when parsing names from the wire. This means that a
-//! `ScratchPad` can be sized to exactly match the protocol limits
-//! [`crate::dnsname::MAX_NAME`] and [`crate::dnsname::MAX_LABS`] and
-//! there's no need for any overflow checking before writing to the
+//! which is suitable when parsing DNS names from the wire. This means
+//! that a `ScratchPad` can be sized to exactly match the protocol
+//! limits [`crate::dnsname::MAX_NAME`] and [`crate::dnsname::MAX_LABS`]
+//! and there's no need for any overflow checking before writing to the
 //! `ScratchPad`.
 
 use crate::error::*;
@@ -68,6 +70,7 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
     }
 
     /// Get a slice covering the initialized part of the scratch pad.
+    #[inline(always)]
     pub fn as_slice(&self) -> &[T] {
         // SAFETY: we have initialized everything up to end, and we can't
         // mutate it again while there's a shared borrow; the origin of
@@ -76,10 +79,12 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
         unsafe { std::slice::from_raw_parts(ptr, self.end) }
     }
 
+    #[inline(always)]
     fn get_mut(&mut self, pos: usize) -> Result<*mut T> {
         Ok(self.uninit.get_mut(pos).ok_or(Error::ScratchOverflow)?.as_mut_ptr())
     }
 
+    #[inline(always)]
     pub fn append(&mut self, elems: &[T]) -> Result<()> {
         let len = elems.len();
         let src = elems.as_ptr();
@@ -92,6 +97,7 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn push(&mut self, elem: T) -> Result<()> {
         let ptr = self.get_mut(self.end)?;
         // SAFETY: the pointer is within bounds and properly aligned.
