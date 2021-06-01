@@ -29,6 +29,10 @@ impl DnsLabels for ScratchName {
     fn nlen(&self) -> usize {
         self.name.len()
     }
+
+    fn label(&self, lab: usize) -> Option<&[u8]> {
+        DnsName::label(self, lab)
+    }
 }
 
 impl DnsName for ScratchName {

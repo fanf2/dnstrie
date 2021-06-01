@@ -79,24 +79,13 @@ pub trait DnsLabels {
 
     /// The length of the name in uncompressed wire format
     fn nlen(&self) -> usize;
-}
-
-/// A DNS name in uncompressed lowercase wire format.
-///
-pub trait DnsName: DnsLabels {
-    /// A slice covering the name.
-    fn name(&self) -> &[u8];
 
     /// A slice covering a label's text, counting from 0 on the
     /// left.
     ///
     /// Returns `None` if the label is out of range.
     ///
-    fn label(&self, lab: usize) -> Option<&[u8]> {
-        let pos = *self.lpos().get(lab)? as usize;
-        let len = *self.name().get(pos)? as usize;
-        self.name().get((pos + 1)..=(pos + len))
-    }
+    fn label(&self, lab: usize) -> Option<&[u8]>;
 
     /// A slice covering a label's text, counting from the right
     /// where 0 is the root zone.
@@ -146,6 +135,19 @@ pub trait DnsName: DnsLabels {
             }
         }
         Ordering::Equal
+    }
+}
+
+/// A DNS name in uncompressed lowercase wire format.
+///
+pub trait DnsName: DnsLabels {
+    /// A slice covering the name.
+    fn name(&self) -> &[u8];
+
+    fn label(&self, lab: usize) -> Option<&[u8]> {
+        let pos = *self.lpos().get(lab)? as usize;
+        let len = *self.name().get(pos)? as usize;
+        self.name().get((pos + 1)..=(pos + len))
     }
 }
 

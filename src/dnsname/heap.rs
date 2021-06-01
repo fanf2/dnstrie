@@ -86,6 +86,10 @@ impl DnsLabels for HeapName {
         // SAFETY: see [`HeapName`] under "Safety"
         unsafe { self.mem.add(self.labs()).read() as usize + 1 }
     }
+
+    fn label(&self, lab: usize) -> Option<&[u8]> {
+        DnsName::label(self, lab)
+    }
 }
 
 impl DnsName for HeapName {
