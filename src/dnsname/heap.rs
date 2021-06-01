@@ -74,14 +74,6 @@ impl DnsLabels for HeapName {
         unsafe { self.mem.read() as usize }
     }
 
-    fn lpos(&self) -> &[u8] {
-        // SAFETY: see [`HeapName`] under "Safety"
-        unsafe {
-            let lpos = self.mem.add(1);
-            std::slice::from_raw_parts(lpos, self.labs())
-        }
-    }
-
     fn nlen(&self) -> usize {
         // SAFETY: see [`HeapName`] under "Safety"
         unsafe { self.mem.add(self.labs()).read() as usize + 1 }
@@ -98,6 +90,14 @@ impl DnsName for HeapName {
         unsafe {
             let name = self.mem.add(1 + self.labs());
             std::slice::from_raw_parts(name, self.nlen())
+        }
+    }
+
+    fn lpos(&self) -> &[u8] {
+        // SAFETY: see [`HeapName`] under "Safety"
+        unsafe {
+            let lpos = self.mem.add(1);
+            std::slice::from_raw_parts(lpos, self.labs())
         }
     }
 }

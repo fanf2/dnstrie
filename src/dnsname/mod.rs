@@ -74,9 +74,6 @@ pub trait DnsLabels {
     /// The number of labels in the name
     fn labs(&self) -> usize;
 
-    /// A slice containing the positions of the labels in the name.
-    fn lpos(&self) -> &[u8];
-
     /// The length of the name in uncompressed wire format
     fn nlen(&self) -> usize;
 
@@ -144,6 +141,9 @@ pub trait DnsName: DnsLabels {
     /// A slice covering the name.
     fn name(&self) -> &[u8];
 
+    /// A slice containing the positions of the labels in the name.
+    fn lpos(&self) -> &[u8];
+
     fn label(&self, lab: usize) -> Option<&[u8]> {
         let pos = *self.lpos().get(lab)? as usize;
         let len = *self.name().get(pos)? as usize;
@@ -183,8 +183,8 @@ macro_rules! impl_dns_name {
 
 /// Parse a DNS name from the wire
 ///
-pub trait FromWire {
-    fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize>;
+pub trait FromWire<'n, 'w> {
+    fn from_wire(&'n mut self, wire: &'w [u8], pos: usize) -> Result<usize>;
 }
 
 /// Shared implementation for parsing a wire-format DNS name
@@ -246,3 +246,4 @@ impl<'u> Dodgy<'u> {
 
 pub mod heap;
 pub mod scratch;
+pub mod wire;

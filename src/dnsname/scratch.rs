@@ -22,10 +22,6 @@ impl DnsLabels for ScratchName {
         self.lpos.len()
     }
 
-    fn lpos(&self) -> &[u8] {
-        self.lpos.as_slice()
-    }
-
     fn nlen(&self) -> usize {
         self.name.len()
     }
@@ -39,9 +35,13 @@ impl DnsName for ScratchName {
     fn name(&self) -> &[u8] {
         self.name.as_slice()
     }
+
+    fn lpos(&self) -> &[u8] {
+        self.lpos.as_slice()
+    }
 }
 
-impl FromWire for ScratchName {
+impl<'n, 'w> FromWire<'n, 'w> for ScratchName {
     fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize> {
         let dodgy = Dodgy { bytes: wire };
         self.clear();
