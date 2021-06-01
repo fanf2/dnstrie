@@ -92,12 +92,60 @@ macro_rules! impl_wire_labels {
 
         impl<Other: DnsLabels> PartialEq<Other> for WireLabels<'_, $p> {
             fn eq(&self, other: &Other) -> bool {
-                self.name_cmp(other) == Ordering::Equal
+                cmp_any_names(self, other) == Ordering::Equal
             }
         }
 
-        impl_dns_labels!(WireLabels<'_, $p>: DnsLabels);
+        impl Ord for WireLabels<'_, $p> {
+            fn cmp(&self, other: &Self) -> Ordering {
+                cmp_any_names(self, other)
+            }
+        }
+
+        impl<Other: DnsLabels> PartialOrd<Other> for WireLabels<'_, $p> {
+            fn partial_cmp(&self, other: &Other) -> Option<Ordering> {
+                Some(cmp_any_names(self, other))
+            }
+        }
+
+        impl std::fmt::Display for WireLabels<'_, $p> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                self.to_text(f)
+            }
+        }
     };
+}
+
+fn cmp_any_labels(aa: &[u8], bb: &[u8]) -> Ordering {
+    for chr in 0.. {
+        let a = &aa.get(chr).map(|a| a.to_ascii_lowercase());
+        let b = &bb.get(chr).map(|b| b.to_ascii_lowercase());
+        match a.cmp(b) {
+            Ordering::Equal if a.is_none() && b.is_none() => break,
+            Ordering::Equal => continue,
+            ne => return ne,
+        }
+    }
+    Ordering::Equal
+}
+
+fn cmp_any_names<A, B>(aa: &A, bb: &B) -> Ordering
+where
+    A: DnsLabels,
+    B: DnsLabels,
+{
+    for lab in 0.. {
+        match (aa.rlabel(lab), bb.rlabel(lab)) {
+            (None, None) => break,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(a), Some(b)) => match cmp_any_labels(a, b) {
+                Ordering::Equal => continue,
+                ne => return ne,
+            },
+        }
+    }
+    Ordering::Equal
 }
 
 impl_wire_labels!(u8);

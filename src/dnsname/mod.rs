@@ -118,44 +118,6 @@ pub trait DnsLabels {
         }
         Ok(())
     }
-
-    fn name_cmp<Other>(&self, other: &Other) -> Ordering
-    where
-        Other: DnsLabels,
-    {
-        for lab in 0.. {
-            let left = &self.rlabel(lab);
-            let right = &other.rlabel(lab);
-            match left.cmp(right) {
-                Ordering::Equal if left.is_none() && right.is_none() => break,
-                Ordering::Equal => continue,
-                ne => return ne,
-            }
-        }
-        Ordering::Equal
-    }
-}
-
-macro_rules! impl_dns_labels {
-    ($name:ty : $other:ident) => {
-        impl Ord for $name {
-            fn cmp(&self, other: &Self) -> Ordering {
-                self.name_cmp(other)
-            }
-        }
-
-        impl<Other: $other> PartialOrd<Other> for $name {
-            fn partial_cmp(&self, other: &Other) -> Option<Ordering> {
-                Some(self.name_cmp(other))
-            }
-        }
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                self.to_text(f)
-            }
-        }
-    };
 }
 
 /// A DNS name in uncompressed lowercase wire format.
@@ -172,6 +134,23 @@ pub trait DnsName: DnsLabels {
         let len = *self.name().get(pos)? as usize;
         self.name().get((pos + 1)..=(pos + len))
     }
+
+    /// only correct if the labels have been squashed to lower case
+    fn cmp_names<Other>(&self, other: &Other) -> Ordering
+    where
+        Other: DnsName,
+    {
+        for lab in 0.. {
+            let left = &self.rlabel(lab);
+            let right = &other.rlabel(lab);
+            match left.cmp(right) {
+                Ordering::Equal if left.is_none() && right.is_none() => break,
+                Ordering::Equal => continue,
+                ne => return ne,
+            }
+        }
+        Ordering::Equal
+    }
 }
 
 macro_rules! impl_dns_name {
@@ -184,7 +163,23 @@ macro_rules! impl_dns_name {
             }
         }
 
-        impl_dns_labels!($name: DnsName);
+        impl Ord for $name {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.cmp_names(other)
+            }
+        }
+
+        impl<Other: DnsName> PartialOrd<Other> for $name {
+            fn partial_cmp(&self, other: &Other) -> Option<Ordering> {
+                Some(self.cmp_names(other))
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                self.to_text(f)
+            }
+        }
     };
 }
 
@@ -261,8 +256,8 @@ mod test {
 
     #[test]
     fn test() -> Result<()> {
-        let wire = b"\x02at\x00  \x05dotat\xc0\x00";
-        let mut wire_labels = WireLabels::<u8>::new();
+        let wire = b"\x02AT\x00  \x05dotat\xc0\x00";
+        let mut wire_labels = WireLabels::<u16>::new();
         wire_labels.from_wire(wire, 6)?;
         let mut scratch_name = ScratchName::new();
         scratch_name.from_wire(wire, 6)?;
