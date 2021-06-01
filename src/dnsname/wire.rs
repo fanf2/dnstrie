@@ -43,24 +43,28 @@ where
     }
 }
 
+impl<'w, P> DnsLabels for WireLabels<'w, P>
+where
+    usize: From<P>,
+    P: Copy,
+{
+    fn labs(&self) -> usize {
+        self.lpos.len()
+    }
+
+    fn nlen(&self) -> usize {
+        self.nlen
+    }
+
+    fn label(&self, lab: usize) -> Option<&[u8]> {
+        let pos = usize::from(*self.lpos.as_slice().get(lab)?);
+        let len = *self.wire?.get(pos)? as usize;
+        self.wire?.get((pos + 1)..=(pos + len))
+    }
+}
+
 macro_rules! impl_wire_labels {
     ($p:ident) => {
-        impl<'w> DnsLabels for WireLabels<'w, $p> {
-            fn labs(&self) -> usize {
-                self.lpos.len()
-            }
-
-            fn nlen(&self) -> usize {
-                self.nlen
-            }
-
-            fn label(&self, lab: usize) -> Option<&[u8]> {
-                let pos = *self.lpos.as_slice().get(lab)? as usize;
-                let len = *self.wire?.get(pos)? as usize;
-                self.wire?.get((pos + 1)..=(pos + len))
-            }
-        }
-
         impl<'n, 'w> FromWire<'n, 'w> for WireLabels<'w, $p> {
             fn from_wire(
                 &mut self,

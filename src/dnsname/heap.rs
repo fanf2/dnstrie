@@ -52,6 +52,17 @@ pub struct HeapName {
     _marker: PhantomData<u8>,
 }
 
+impl HeapName {
+    // SAFETY: callers must satisfy the requirements described at
+    // [`HeapName`] under "Safety"
+    unsafe fn from_vec(vec: Vec<u8>) -> Self {
+        let shrunk = vec.into_boxed_slice();
+        let slice_ptr = Box::into_raw(shrunk);
+        let mem = slice_ptr as *mut u8;
+        HeapName { mem, _marker: PhantomData }
+    }
+}
+
 impl Drop for HeapName {
     fn drop(&mut self) {
         let len = self.heap_len();
@@ -116,13 +127,13 @@ impl std::fmt::Debug for HeapName {
 /// This is just a small extension to the [`DnsName`] trait,
 /// specific to the needs of a [`HeapName`].
 ///
-trait HeapLen: DnsName {
+trait HeapLen: DnsLabels {
     fn heap_len(&self) -> usize {
         1 + self.labs() + self.nlen()
     }
 }
 
-impl<N> HeapLen for N where N: DnsName {}
+impl<N> HeapLen for N where N: DnsLabels {}
 
 impl From<ScratchName> for HeapName {
     fn from(scratch: ScratchName) -> HeapName {
@@ -130,10 +141,36 @@ impl From<ScratchName> for HeapName {
         vec.push(scratch.labs() as u8);
         vec.extend_from_slice(scratch.lpos());
         vec.extend_from_slice(scratch.name());
-        let shrunk = vec.into_boxed_slice();
-        let slice_ptr = Box::into_raw(shrunk);
-        let mem = slice_ptr as *mut u8;
-        HeapName { mem, _marker: PhantomData }
+        // SAFETY: see [`HeapName`] under "Safety"
+        unsafe { HeapName::from_vec(vec) }
+    }
+}
+
+impl<P> From<WireLabels<'_, P>> for HeapName
+where
+    usize: From<P>,
+    P: Copy,
+{
+    fn from(wire: WireLabels<'_, P>) -> HeapName {
+        let mut vec = vec![0; wire.heap_len()];
+        let labs = wire.labs();
+        vec[0] = labs as u8;
+        let mut lpos = 0;
+        let mut npos = labs + 1;
+        for lab in 0..labs {
+            let label = wire.label(lab).unwrap();
+            let llen = label.len() as u8;
+            vec[lab + 1] = lpos;
+            lpos += 1 + llen;
+            vec[npos] = llen;
+            npos += 1;
+            for ch in label {
+                vec[npos] = ch.to_ascii_lowercase();
+                npos += 1;
+            }
+        }
+        // SAFETY: see [`HeapName`] under "Safety"
+        unsafe { HeapName::from_vec(vec) }
     }
 }
 
