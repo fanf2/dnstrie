@@ -1,3 +1,9 @@
+pub use crate::bmpvec::*;
+pub use crate::dnsname::*;
+pub use crate::error::*;
+pub use crate::scratchpad::*;
+pub use crate::triebits::*;
+
 pub mod bmpvec;
 pub mod dnsname;
 pub mod error;
