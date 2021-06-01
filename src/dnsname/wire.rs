@@ -12,6 +12,7 @@
 
 use crate::dnsname::*;
 use crate::scratchpad::*;
+use core::cmp::Ordering;
 use core::convert::TryInto;
 
 #[derive(Debug, Default)]
@@ -86,8 +87,32 @@ macro_rules! impl_wire_labels {
                 Ok(())
             }
         }
+
+        impl Eq for WireLabels<'_, $p> {}
+
+        impl<Other: DnsLabels> PartialEq<Other> for WireLabels<'_, $p> {
+            fn eq(&self, other: &Other) -> bool {
+                self.name_cmp(other) == Ordering::Equal
+            }
+        }
+
+        impl_dns_labels!(WireLabels<'_, $p>: DnsLabels);
     };
 }
 
 impl_wire_labels!(u8);
 impl_wire_labels!(u16);
+
+#[cfg(test)]
+mod test {
+    use crate::dnsname::*;
+
+    #[test]
+    fn test() -> Result<()> {
+        let wire = b"\x05dotat\x02at\x00";
+        let mut name = WireLabels::<u8>::new();
+        name.from_wire(wire, 0)?;
+        assert_eq!("dotat.at", format!("{}", name));
+        Ok(())
+    }
+}

@@ -54,6 +54,7 @@ use core::cmp::Ordering;
 
 pub use self::heap::*;
 pub use self::scratch::*;
+pub use self::wire::*;
 
 /// Maximum length of a DNS name, in octets on the wire.
 pub const MAX_NAME: usize = 255;
@@ -120,7 +121,7 @@ pub trait DnsLabels {
 
     fn name_cmp<Other>(&self, other: &Other) -> Ordering
     where
-        Other: DnsName,
+        Other: DnsLabels,
     {
         for lab in 0.. {
             let left = &self.rlabel(lab);
@@ -133,6 +134,28 @@ pub trait DnsLabels {
         }
         Ordering::Equal
     }
+}
+
+macro_rules! impl_dns_labels {
+    ($name:ty : $other:ident) => {
+        impl Ord for $name {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.name_cmp(other)
+            }
+        }
+
+        impl<Other: $other> PartialOrd<Other> for $name {
+            fn partial_cmp(&self, other: &Other) -> Option<Ordering> {
+                Some(self.name_cmp(other))
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                self.to_text(f)
+            }
+        }
+    };
 }
 
 /// A DNS name in uncompressed lowercase wire format.
@@ -161,23 +184,7 @@ macro_rules! impl_dns_name {
             }
         }
 
-        impl Ord for $name {
-            fn cmp(&self, other: &Self) -> Ordering {
-                self.name_cmp(other)
-            }
-        }
-
-        impl<Other: DnsName> PartialOrd<Other> for $name {
-            fn partial_cmp(&self, other: &Other) -> Option<Ordering> {
-                Some(self.name_cmp(other))
-            }
-        }
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                self.to_text(f)
-            }
-        }
+        impl_dns_labels!($name: DnsName);
     };
 }
 
