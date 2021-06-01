@@ -49,6 +49,7 @@
 
 use crate::error::Error::*;
 use crate::error::{Error, Result};
+use core::cmp::max;
 use core::cmp::Ordering;
 
 pub use self::heap::*;
@@ -67,20 +68,24 @@ pub const MAX_LLEN: usize = 0x3F;
 ///
 pub const MAX_LABS: usize = (MAX_NAME - 1) / 2 + 1;
 
-/// A DNS name in uncompressed lowercase wire format.
+/// An index of the labels of a DNS name
 ///
-pub trait DnsName {
+pub trait DnsLabels {
     /// The number of labels in the name
     fn labs(&self) -> usize;
 
     /// A slice containing the positions of the labels in the name.
     fn lpos(&self) -> &[u8];
 
-    /// A slice covering the name.
-    fn name(&self) -> &[u8];
-
     /// The length of the name in uncompressed wire format
     fn nlen(&self) -> usize;
+}
+
+/// A DNS name in uncompressed lowercase wire format.
+///
+pub trait DnsName: DnsLabels {
+    /// A slice covering the name.
+    fn name(&self) -> &[u8];
 
     /// A slice covering a label's text, counting from 0 on the
     /// left.
@@ -172,6 +177,69 @@ macro_rules! impl_dns_name {
             }
         }
     };
+}
+
+/// Parse a DNS name from the wire
+///
+pub trait FromWire {
+    fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize>;
+}
+
+/// Shared implementation for parsing a wire-format DNS name
+///
+trait LabelFromWire {
+    fn label_from_wire(
+        &mut self,
+        dodgy: Dodgy,
+        pos: usize,
+        llen: u8,
+    ) -> Result<()>;
+
+    fn dodgy_from_wire(&mut self, dodgy: Dodgy, pos: usize) -> Result<usize> {
+        let mut pos = pos;
+        let mut min = pos;
+        let mut end = pos;
+        loop {
+            let llen = match dodgy.get(pos)? {
+                len @ 0x00..=0x3F => len,
+                wat @ 0x40..=0xBF => return Err(LabelType(wat)),
+                hi @ 0xC0..=0xFF => {
+                    end = max(end, pos + 2);
+                    let lo = dodgy.get(pos + 1)?;
+                    pos = (hi as usize & 0x3F) << 8 | lo as usize;
+                    if let 0xC0..=0xFF = dodgy.get(pos)? {
+                        return Err(CompressChain);
+                    } else if min <= pos {
+                        return Err(CompressBad);
+                    } else {
+                        min = pos;
+                        continue;
+                    }
+                }
+            };
+            self.label_from_wire(dodgy, pos, llen)?;
+            pos += 1 + llen as usize;
+            end = max(end, pos);
+            if llen == 0 {
+                return Ok(end);
+            }
+        }
+    }
+}
+
+/// Wrapper for panic-free indexing into untrusted data
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct Dodgy<'u> {
+    bytes: &'u [u8],
+}
+
+impl<'u> Dodgy<'u> {
+    fn get(self, pos: usize) -> Result<u8> {
+        self.bytes.get(pos).copied().ok_or(NameTruncated)
+    }
+    fn slice(self, pos: usize, len: usize) -> Result<&'u [u8]> {
+        self.bytes.get(pos..pos + len).ok_or(NameTruncated)
+    }
 }
 
 pub mod heap;

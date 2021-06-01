@@ -6,7 +6,6 @@
 
 use crate::dnsname::*;
 use crate::scratchpad::*;
-use core::cmp::max;
 use core::convert::TryInto;
 use std::str::{from_utf8, FromStr};
 
@@ -18,7 +17,7 @@ pub struct ScratchName {
 
 impl_dns_name!(ScratchName);
 
-impl DnsName for ScratchName {
+impl DnsLabels for ScratchName {
     fn labs(&self) -> usize {
         self.lpos.len()
     }
@@ -27,12 +26,34 @@ impl DnsName for ScratchName {
         self.lpos.as_slice()
     }
 
+    fn nlen(&self) -> usize {
+        self.name.len()
+    }
+}
+
+impl DnsName for ScratchName {
     fn name(&self) -> &[u8] {
         self.name.as_slice()
     }
+}
 
-    fn nlen(&self) -> usize {
-        self.name.len()
+impl FromWire for ScratchName {
+    fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize> {
+        let dodgy = Dodgy { bytes: wire };
+        self.clear();
+        self.dodgy_from_wire(dodgy, pos).map_err(|err| self.clear_err(err))
+    }
+}
+
+impl LabelFromWire for ScratchName {
+    fn label_from_wire(
+        &mut self,
+        dodgy: Dodgy,
+        pos: usize,
+        llen: u8,
+    ) -> Result<()> {
+        // skip length byte
+        self.add_label(dodgy, pos + 1, llen)
     }
 }
 
@@ -72,37 +93,6 @@ impl ScratchName {
             self.name.push(dodgy.get(rpos + i)?.to_ascii_lowercase())?;
         }
         Ok(())
-    }
-
-    fn dodgy_from_wire(&mut self, dodgy: Dodgy, pos: usize) -> Result<usize> {
-        let mut pos = pos;
-        let mut hwm = pos;
-        let mut end = pos;
-        loop {
-            let llen = match dodgy.get(pos)? {
-                len @ 0x00..=0x3F => len,
-                wat @ 0x40..=0xBF => return Err(LabelType(wat)),
-                hi @ 0xC0..=0xFF => {
-                    end = max(end, pos + 2);
-                    let lo = dodgy.get(pos + 1)?;
-                    pos = (hi as usize & 0x3F) << 8 | lo as usize;
-                    if let 0xC0..=0xFF = dodgy.get(pos)? {
-                        return Err(CompressChain);
-                    } else if hwm <= pos {
-                        return Err(CompressBad);
-                    } else {
-                        hwm = pos;
-                        continue;
-                    }
-                }
-            };
-            self.add_label(dodgy, pos + 1, llen)?;
-            pos += 1 + llen as usize;
-            end = max(end, pos);
-            if llen == 0 {
-                return Ok(end);
-            }
-        }
     }
 
     fn dodgy_from_text(&mut self, dodgy: Dodgy) -> Result<usize> {
@@ -160,21 +150,6 @@ fn label_from_text(
         }
     }
     Ok(!label.is_empty())
-}
-
-/// Wrapper for panic-free indexing into untrusted data
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct Dodgy<'u> {
-    bytes: &'u [u8],
-}
-
-impl<'u> Dodgy<'u> {
-    fn get(self, pos: usize) -> Result<u8> {
-        self.bytes.get(pos).copied().ok_or(NameTruncated)
-    }
-    fn slice(self, pos: usize, len: usize) -> Result<&'u [u8]> {
-        self.bytes.get(pos..pos + len).ok_or(NameTruncated)
-    }
 }
 
 #[cfg(test)]

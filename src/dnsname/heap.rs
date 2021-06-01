@@ -68,7 +68,7 @@ unsafe impl Sync for HeapName {}
 
 impl_dns_name!(HeapName);
 
-impl DnsName for HeapName {
+impl DnsLabels for HeapName {
     fn labs(&self) -> usize {
         // SAFETY: see [`HeapName`] under "Safety"
         unsafe { self.mem.read() as usize }
@@ -82,17 +82,19 @@ impl DnsName for HeapName {
         }
     }
 
+    fn nlen(&self) -> usize {
+        // SAFETY: see [`HeapName`] under "Safety"
+        unsafe { self.mem.add(self.labs()).read() as usize + 1 }
+    }
+}
+
+impl DnsName for HeapName {
     fn name(&self) -> &[u8] {
         // SAFETY: see [`HeapName`] under "Safety"
         unsafe {
             let name = self.mem.add(1 + self.labs());
             std::slice::from_raw_parts(name, self.nlen())
         }
-    }
-
-    fn nlen(&self) -> usize {
-        // SAFETY: see [`HeapName`] under "Safety"
-        unsafe { self.mem.add(self.labs()).read() as usize + 1 }
     }
 }
 
