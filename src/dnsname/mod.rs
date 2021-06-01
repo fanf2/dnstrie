@@ -254,3 +254,19 @@ impl<'u> Dodgy<'u> {
 pub mod heap;
 pub mod scratch;
 pub mod wire;
+
+#[cfg(test)]
+mod test {
+    use crate::dnsname::*;
+
+    #[test]
+    fn test() -> Result<()> {
+        let wire = b"\x02at\x00  \x05dotat\xc0\x00";
+        let mut wire_labels = WireLabels::<u8>::new();
+        wire_labels.from_wire(wire, 6)?;
+        let mut scratch_name = ScratchName::new();
+        scratch_name.from_wire(wire, 6)?;
+        assert_eq!(wire_labels, scratch_name);
+        Ok(())
+    }
+}
