@@ -148,8 +148,7 @@ impl From<ScratchName> for HeapName {
 
 impl<P> From<WireLabels<'_, P>> for HeapName
 where
-    usize: From<P>,
-    P: Copy,
+    P: Copy + TryFrom<usize> + Into<usize>,
 {
     fn from(wire: WireLabels<'_, P>) -> HeapName {
         let mut vec = vec![0; wire.heap_len()];

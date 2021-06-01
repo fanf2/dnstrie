@@ -11,6 +11,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("Conversion is inconcievable")]
     BugFromInt(#[from] std::num::TryFromIntError),
+    #[error("Wire position is inconcievable ({0})")]
+    BugWirePos(usize),
     #[error("Scratch pad is inconcievable ({0})")]
     BugScratchPad(&'static str),
     #[error("DNS name has a bad compression pointer")]

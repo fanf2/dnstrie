@@ -13,7 +13,7 @@
 use crate::dnsname::*;
 use crate::scratchpad::*;
 use core::cmp::Ordering;
-use core::convert::TryInto;
+use core::convert::TryFrom;
 
 #[derive(Debug, Default)]
 pub struct WireLabels<'w, P> {
@@ -22,9 +22,9 @@ pub struct WireLabels<'w, P> {
     wire: Option<&'w [u8]>,
 }
 
-impl<'w, P> WireLabels<'w, P>
+impl<P> WireLabels<'_, P>
 where
-    P: Copy,
+    P: Copy + TryFrom<usize> + Into<usize>,
 {
     #[inline(always)]
     pub fn new() -> Self {
@@ -43,10 +43,9 @@ where
     }
 }
 
-impl<'w, P> DnsLabels for WireLabels<'w, P>
+impl<P> DnsLabels for WireLabels<'_, P>
 where
-    usize: From<P>,
-    P: Copy,
+    P: Copy + TryFrom<usize> + Into<usize>,
 {
     fn labs(&self) -> usize {
         self.lpos.len()
@@ -57,67 +56,76 @@ where
     }
 
     fn label(&self, lab: usize) -> Option<&[u8]> {
-        let pos = usize::from(*self.lpos.as_slice().get(lab)?);
+        let pos = into_usize(*self.lpos.as_slice().get(lab)?);
         let len = *self.wire?.get(pos)? as usize;
         self.wire?.get((pos + 1)..=(pos + len))
     }
 }
 
-macro_rules! impl_wire_labels {
-    ($p:ident) => {
-        impl<'n, 'w> FromWire<'n, 'w> for WireLabels<'w, $p> {
-            fn from_wire(
-                &mut self,
-                wire: &'w [u8],
-                pos: usize,
-            ) -> Result<usize> {
-                let dodgy = Dodgy { bytes: wire };
-                self.clear();
-                self.wire = Some(wire);
-                self.dodgy_from_wire(dodgy, pos)
-                    .map_err(|err| self.clear_err(err))
-            }
-        }
+impl<'n, 'w, P> FromWire<'n, 'w> for WireLabels<'w, P>
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    fn from_wire(&mut self, wire: &'w [u8], pos: usize) -> Result<usize> {
+        let dodgy = Dodgy { bytes: wire };
+        self.clear();
+        self.wire = Some(wire);
+        self.dodgy_from_wire(dodgy, pos).map_err(|err| self.clear_err(err))
+    }
+}
 
-        impl<'w> LabelFromWire for WireLabels<'w, $p> {
-            fn label_from_wire(
-                &mut self,
-                _: Dodgy,
-                pos: usize,
-                llen: u8,
-            ) -> Result<()> {
-                self.lpos.push(pos.try_into()?)?;
-                self.nlen += 1 + llen as usize;
-                Ok(())
-            }
-        }
+impl<P> LabelFromWire for WireLabels<'_, P>
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    fn label_from_wire(
+        &mut self,
+        _: Dodgy,
+        pos: usize,
+        llen: u8,
+    ) -> Result<()> {
+        self.lpos.push(from_usize(pos)?)?;
+        self.nlen += 1 + llen as usize;
+        Ok(())
+    }
+}
 
-        impl Eq for WireLabels<'_, $p> {}
+impl<P> Eq for WireLabels<'_, P> where P: Copy + TryFrom<usize> + Into<usize> {}
 
-        impl<Other: DnsLabels> PartialEq<Other> for WireLabels<'_, $p> {
-            fn eq(&self, other: &Other) -> bool {
-                cmp_any_names(self, other) == Ordering::Equal
-            }
-        }
+impl<P, Other: DnsLabels> PartialEq<Other> for WireLabels<'_, P>
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    fn eq(&self, other: &Other) -> bool {
+        cmp_any_names(self, other) == Ordering::Equal
+    }
+}
 
-        impl Ord for WireLabels<'_, $p> {
-            fn cmp(&self, other: &Self) -> Ordering {
-                cmp_any_names(self, other)
-            }
-        }
+impl<P> Ord for WireLabels<'_, P>
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        cmp_any_names(self, other)
+    }
+}
 
-        impl<Other: DnsLabels> PartialOrd<Other> for WireLabels<'_, $p> {
-            fn partial_cmp(&self, other: &Other) -> Option<Ordering> {
-                Some(cmp_any_names(self, other))
-            }
-        }
+impl<P, Other: DnsLabels> PartialOrd<Other> for WireLabels<'_, P>
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    fn partial_cmp(&self, other: &Other) -> Option<Ordering> {
+        Some(cmp_any_names(self, other))
+    }
+}
 
-        impl std::fmt::Display for WireLabels<'_, $p> {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                self.to_text(f)
-            }
-        }
-    };
+impl<P> std::fmt::Display for WireLabels<'_, P>
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.to_text(f)
+    }
 }
 
 fn cmp_any_labels(aa: &[u8], bb: &[u8]) -> Ordering {
@@ -152,8 +160,19 @@ where
     Ordering::Equal
 }
 
-impl_wire_labels!(u8);
-impl_wire_labels!(u16);
+fn from_usize<P>(pos: usize) -> Result<P>
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    P::try_from(pos).or(Err(BugWirePos(pos)))
+}
+
+fn into_usize<P>(pos: P) -> usize
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    <P as Into<usize>>::into(pos)
+}
 
 #[cfg(test)]
 mod test {
