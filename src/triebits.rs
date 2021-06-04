@@ -30,15 +30,15 @@ impl TrieName {
         TrieName { key: ScratchPad::new() }
     }
 
-    pub fn as_slice(&self) {
-        self.key.as_slice();
+    pub fn as_slice(&self) -> &[u8] {
+        self.key.as_slice()
     }
 
     pub fn clear(&mut self) {
         self.key.clear();
     }
 
-    pub fn from_dns_name<T>(&mut self, name: T) -> Result<()>
+    pub fn from_dns_name<T>(&mut self, name: &T) -> Result<()>
     where
         T: DnsLabels,
     {
@@ -56,6 +56,38 @@ impl TrieName {
         }
         // terminator is a double NOBYTE
         self.key.push(SHIFT_NOBYTE)
+    }
+
+    pub fn make_dns_name(&self) -> HeapName {
+        let mut pname = [0u8; MAX_PNAME];
+        let mut ppos = 0; // previous label, starts with the root
+        let mut lpos = 1; // this label's length, starts after the root
+        let mut pos = lpos + 1; // the next byte will be after the length
+        let mut it = self.as_slice().iter();
+        while let Some(one) = it.next().map(|b| *b as usize) {
+            if one == SHIFT_NOBYTE as usize {
+                let llen = pos - lpos - 1;
+                if llen == 0 {
+                    break;
+                }
+                pname[lpos] = llen as u8;
+                pname[pos] = 0xC0 | (ppos >> 8) as u8;
+                pname[pos + 1] = (ppos & 0xFF) as u8;
+                ppos = lpos;
+                lpos = pos + 2;
+                pos = lpos + 1;
+            } else if BITS_TO_BYTE[one][0] != 0 {
+                pname[pos] = BITS_TO_BYTE[one][0];
+                pos += 1;
+            } else {
+                let two = it.next().copied().unwrap() as usize;
+                pname[pos] = BITS_TO_BYTE[one][two];
+                pos += 1;
+            }
+        }
+        let mut name = WireLabels::<u16>::new();
+        name.from_wire(&pname[..], ppos).unwrap();
+        name.into()
     }
 }
 
@@ -134,6 +166,7 @@ const fn gen_bits_to_byte() -> [[u8; 48]; 48] {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::convert::TryFrom;
 
     #[test]
     fn byte_to_bits() {
@@ -158,5 +191,19 @@ mod test {
                 assert!(ihi < jhi);
             }
         }
+    }
+
+    #[test]
+    fn invert() -> Result<()> {
+        let text = "dotat.at";
+        let name1 = HeapName::try_from(text)?;
+        eprintln!("{:#?}", name1);
+        let mut tkey = TrieName::new();
+        tkey.from_dns_name(&name1)?;
+        eprintln!("{:#?}", tkey);
+        let name2 = tkey.make_dns_name();
+        eprintln!("{:#?}", name2);
+        assert_eq!(name1, name2);
+        Ok(())
     }
 }

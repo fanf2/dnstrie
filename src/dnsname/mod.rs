@@ -69,6 +69,16 @@ pub const MAX_LLEN: usize = 0x3F;
 ///
 pub const MAX_LABS: usize = (MAX_NAME - 1) / 2 + 1;
 
+/// Maximum space used by a comPressed name with Pointers
+///
+/// When every label has a pointer (needing two bytes) but the name is
+/// still contiguous. This is used when we generate a name in
+/// lexicographic order (reversed labels, from the root to the leaf,
+/// big endian) and use the compression pointers to re-order it into
+/// normal wire format.
+///
+pub const MAX_PNAME: usize = MAX_NAME + MAX_LABS * 2;
+
 /// An index of the labels of a DNS name
 ///
 pub trait DnsLabels {
