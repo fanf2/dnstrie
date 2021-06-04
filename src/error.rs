@@ -15,6 +15,8 @@ pub enum Error {
     BugWirePos(usize),
     #[error("Scratch pad is inconcievable ({0})")]
     BugScratchPad(&'static str),
+    #[error("Trie name is inconcievable")]
+    BugTrieName,
     #[error("DNS name has a bad compression pointer")]
     CompressBad,
     #[error("DNS name has chained compression pointers")]

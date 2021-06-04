@@ -58,13 +58,13 @@ impl TrieName {
         self.key.push(SHIFT_NOBYTE)
     }
 
-    pub fn make_dns_name(&self) -> HeapName {
+    pub fn make_dns_name(&self) -> Result<HeapName> {
         let mut pname = [0u8; MAX_PNAME];
         let mut ppos = 0; // previous label, starts with the root
         let mut lpos = 1; // this label's length, starts after the root
         let mut pos = lpos + 1; // the next byte will be after the length
-        let mut it = self.as_slice().iter();
-        while let Some(one) = it.next().map(|b| *b as usize) {
+        let mut it = self.as_slice().iter().map(|b| *b as usize);
+        while let Some(one) = it.next() {
             if one == SHIFT_NOBYTE as usize {
                 let llen = pos - lpos - 1;
                 if llen == 0 {
@@ -80,14 +80,14 @@ impl TrieName {
                 pname[pos] = BITS_TO_BYTE[one][0];
                 pos += 1;
             } else {
-                let two = it.next().copied().unwrap() as usize;
+                let two = it.next().ok_or(Error::BugTrieName)?;
                 pname[pos] = BITS_TO_BYTE[one][two];
                 pos += 1;
             }
         }
         let mut name = WireLabels::<u16>::new();
-        name.from_wire(&pname[..], ppos).unwrap();
-        name.into()
+        name.from_wire(&pname[..], ppos)?;
+        Ok(name.into())
     }
 }
 
@@ -201,7 +201,7 @@ mod test {
         let mut tkey = TrieName::new();
         tkey.from_dns_name(&name1)?;
         eprintln!("{:#?}", tkey);
-        let name2 = tkey.make_dns_name();
+        let name2 = tkey.make_dns_name()?;
         eprintln!("{:#?}", name2);
         assert_eq!(name1, name2);
         Ok(())
