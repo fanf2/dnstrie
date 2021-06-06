@@ -1,9 +1,7 @@
 //! Bitmap layout for DNS qp-trie
 //! =============================
 
-use crate::dnsname::*;
-use crate::error::*;
-use crate::scratchpad::*;
+use crate::prelude::*;
 
 //const SHIFT_BRANCH: u8 = 0;
 const SHIFT_NOBYTE: u8 = 1;
@@ -165,8 +163,7 @@ const fn gen_bits_to_byte() -> [[u8; 48]; 48] {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use std::convert::TryFrom;
+    use crate::prelude::*;
 
     #[test]
     fn byte_to_bits() {

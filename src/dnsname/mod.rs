@@ -47,10 +47,8 @@
 //! We use [`ScratchPad`][crate::scratchpad::ScratchPad]s to make
 //! these reformatted names without allocating.
 
-use crate::error::Error::*;
-use crate::error::{Error, Result};
+use crate::prelude::*;
 use core::cmp::max;
-use core::cmp::Ordering;
 
 pub use self::heap::*;
 pub use self::scratch::*;
@@ -201,7 +199,7 @@ pub trait FromWire<'n, 'w> {
 
 /// Shared implementation for parsing a wire-format DNS name
 ///
-trait LabelFromWire {
+pub(crate) trait LabelFromWire {
     fn label_from_wire(
         &mut self,
         dodgy: Dodgy,
@@ -243,7 +241,7 @@ trait LabelFromWire {
 
 /// Wrapper for panic-free indexing into untrusted data
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct Dodgy<'u> {
+pub(crate) struct Dodgy<'u> {
     bytes: &'u [u8],
 }
 
@@ -262,7 +260,7 @@ pub mod wire;
 
 #[cfg(test)]
 mod test {
-    use crate::dnsname::*;
+    use crate::prelude::*;
 
     #[test]
     fn test() -> Result<()> {

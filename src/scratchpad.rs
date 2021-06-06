@@ -15,7 +15,7 @@
 //! and there's no need for any overflow checking before writing to the
 //! `ScratchPad`.
 
-use crate::error::*;
+use crate::prelude::*;
 use std::mem::MaybeUninit;
 
 pub struct ScratchPad<T, const SIZE: usize> {
@@ -81,7 +81,7 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
 
     #[inline(always)]
     fn get_mut(&mut self, pos: usize) -> Result<*mut T> {
-        Ok(self.uninit.get_mut(pos).ok_or(Error::ScratchOverflow)?.as_mut_ptr())
+        Ok(self.uninit.get_mut(pos).ok_or(ScratchOverflow)?.as_mut_ptr())
     }
 
     #[inline(always)]

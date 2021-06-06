@@ -10,10 +10,7 @@
 //! for uncompressed (contiguous) names, which needs less space
 //! than `u16` which is necessary for compressed names.
 
-use crate::dnsname::*;
-use crate::scratchpad::*;
-use core::cmp::Ordering;
-use core::convert::TryFrom;
+use crate::prelude::*;
 
 #[derive(Debug, Default)]
 pub struct WireLabels<'w, P> {
@@ -176,7 +173,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::dnsname::*;
+    use crate::prelude::*;
 
     #[test]
     fn test() -> Result<()> {

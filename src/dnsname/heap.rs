@@ -11,9 +11,7 @@
 //!
 //!   * it only uses a single word to refer to the allocation.
 
-use crate::dnsname::*;
-use std::convert::TryFrom;
-use std::marker::PhantomData;
+use crate::prelude::*;
 
 /// A DNS name owned and allocated on the heap
 ///
@@ -197,8 +195,7 @@ impl TryFrom<&str> for HeapName {
 
 #[cfg(test)]
 mod test {
-    use crate::dnsname::*;
-    use std::convert::TryFrom;
+    use crate::prelude::*;
 
     #[test]
     fn test() -> Result<()> {

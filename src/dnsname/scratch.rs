@@ -4,9 +4,7 @@
 //! This kind of name is decompressed and canonicalized to lower case.
 //! The name and label pointers are stored in its scratch pad.
 
-use crate::dnsname::*;
-use crate::scratchpad::*;
-use core::convert::TryInto;
+use crate::prelude::*;
 use std::str::{from_utf8, FromStr};
 
 #[derive(Debug, Default)]
@@ -158,7 +156,7 @@ fn label_from_text(
 
 #[cfg(test)]
 mod test {
-    use crate::dnsname::*;
+    use crate::prelude::*;
 
     #[test]
     fn test() -> Result<()> {

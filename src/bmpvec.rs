@@ -14,9 +14,9 @@
 //!
 //! See also "Hacker's Delight" by Henry S. Warren Jr, section 5-1.
 
+use crate::prelude::*;
+
 use bmp::*;
-use std::convert::TryInto;
-use std::marker::PhantomData;
 
 /// A [`BmpVec`] is a sparse vector of up to 64 elements.
 ///
@@ -523,7 +523,7 @@ mod bmp {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::prelude::*;
 
     #[test]
     #[should_panic]

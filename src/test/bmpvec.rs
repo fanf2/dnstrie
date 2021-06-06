@@ -1,5 +1,4 @@
-use crate::bmpvec::*;
-use crate::test::blimpvec::*;
+use crate::test::prelude::*;
 
 pub fn exercise(data: &[u8]) {
     let mut bmp = BmpVec::new();

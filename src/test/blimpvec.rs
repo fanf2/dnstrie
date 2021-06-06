@@ -4,7 +4,7 @@
 //! This is a container type that should work the same as BmpVec,
 //! but it's simpler: no compression, no unsafe code.
 
-use std::convert::TryInto;
+use crate::prelude::*;
 
 #[derive(PartialEq)]
 pub struct BlimpVec<T> {
@@ -128,8 +128,6 @@ where
         f.debug_map().entries(self.iter()).finish()
     }
 }
-
-use crate::bmpvec::*;
 
 impl<T> From<&BlimpVec<T>> for BmpVec<T>
 where
