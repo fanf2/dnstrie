@@ -365,7 +365,7 @@ where
 /// The other operator is `Bmp ^ Bit` which is not weird.
 
 mod bmp {
-    use std::convert::TryInto;
+    use core::convert::TryInto;
 
     /// A bitmap to identify which elements are present in a
     /// [`BmpVec`][super::BmpVec]
@@ -523,7 +523,7 @@ mod bmp {
 
 #[cfg(test)]
 mod test {
-    use crate::prelude::*;
+    use super::*;
 
     #[test]
     #[should_panic]

@@ -163,7 +163,7 @@ const fn gen_bits_to_byte() -> [[u8; 48]; 48] {
 
 #[cfg(test)]
 mod test {
-    use crate::prelude::*;
+    use super::*;
 
     #[test]
     fn byte_to_bits() {

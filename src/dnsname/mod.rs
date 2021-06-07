@@ -260,7 +260,7 @@ pub mod wire;
 
 #[cfg(test)]
 mod test {
-    use crate::prelude::*;
+    use super::*;
 
     #[test]
     fn test() -> Result<()> {

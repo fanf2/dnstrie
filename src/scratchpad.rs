@@ -16,7 +16,7 @@
 //! `ScratchPad`.
 
 use crate::prelude::*;
-use std::mem::MaybeUninit;
+use core::mem::MaybeUninit;
 
 pub struct ScratchPad<T, const SIZE: usize> {
     uninit: [MaybeUninit<T>; SIZE],

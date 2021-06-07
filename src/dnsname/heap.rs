@@ -195,7 +195,7 @@ impl TryFrom<&str> for HeapName {
 
 #[cfg(test)]
 mod test {
-    use crate::prelude::*;
+    use super::*;
 
     #[test]
     fn test() -> Result<()> {

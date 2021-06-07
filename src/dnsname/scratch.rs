@@ -156,7 +156,7 @@ fn label_from_text(
 
 #[cfg(test)]
 mod test {
-    use crate::prelude::*;
+    use super::*;
 
     #[test]
     fn test() -> Result<()> {
