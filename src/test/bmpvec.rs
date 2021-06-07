@@ -20,7 +20,7 @@ pub enum Action {
 
 use Action::*;
 
-pub fn exercise(actions: &[Action]) {
+pub fn exercise_actions(actions: &[Action]) {
     let mut bmp = BmpVec::new();
     let mut blimp = BlimpVec::new();
     for &action in actions {
@@ -82,19 +82,23 @@ pub fn exercise(actions: &[Action]) {
     }
 }
 
+pub fn exercise_bytes(bytes: &[u8]) {
+    let a: Vec<Action> = Unstructured::new(bytes)
+        .arbitrary_iter()
+        .unwrap()
+        .map(|e| e.unwrap())
+        .collect();
+    exercise_actions(&a[..])
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::iter::repeat_with;
 
     #[test]
-    fn test() -> Result<()> {
-        type Actions = [Action; 1000];
-        let (min, max) = Actions::size_hint(0);
-        let bytes = max.unwrap_or(min);
-        let r: Vec<u8> = repeat_with(|| fastrand::u8(..)).take(bytes).collect();
-        let a: Actions = Unstructured::new(&r[..]).arbitrary()?;
-        exercise(&a[..]);
-        Ok(())
+    fn test() {
+        let mut rand = [0u8; 10000];
+        rand.fill_with(|| fastrand::u8(..));
+        exercise_bytes(&rand[..]);
     }
 }

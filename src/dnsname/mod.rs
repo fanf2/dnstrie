@@ -257,22 +257,3 @@ impl<'u> Dodgy<'u> {
 pub mod heap;
 pub mod scratch;
 pub mod wire;
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test() -> Result<()> {
-        let wire = b"\x02AT\x00  \x05dotat\xc0\x00";
-        let mut wire_labels = WireLabels::<u16>::new();
-        wire_labels.from_wire(wire, 6)?;
-        let mut scratch_name = ScratchName::new();
-        scratch_name.from_wire(wire, 6)?;
-        assert_eq!(wire_labels, scratch_name);
-        let heap1 = HeapName::from(wire_labels);
-        let heap2 = HeapName::from(scratch_name);
-        assert_eq!(heap1, heap2);
-        Ok(())
-    }
-}

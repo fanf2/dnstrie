@@ -1,4 +1,5 @@
 use core::convert::TryFrom;
+use dnstrie::error::*;
 use dnstrie::*;
 
 fn main() -> Result<()> {

@@ -133,8 +133,8 @@ trait HeapLen: DnsLabels {
 
 impl<N> HeapLen for N where N: DnsLabels {}
 
-impl From<ScratchName> for HeapName {
-    fn from(scratch: ScratchName) -> HeapName {
+impl From<&ScratchName> for HeapName {
+    fn from(scratch: &ScratchName) -> HeapName {
         let mut vec = Vec::with_capacity(scratch.heap_len());
         vec.push(scratch.labs() as u8);
         vec.extend_from_slice(scratch.lpos());
@@ -144,11 +144,17 @@ impl From<ScratchName> for HeapName {
     }
 }
 
-impl<P> From<WireLabels<'_, P>> for HeapName
+impl From<ScratchName> for HeapName {
+    fn from(scratch: ScratchName) -> HeapName {
+        HeapName::from(&scratch)
+    }
+}
+
+impl<P> From<&WireLabels<'_, P>> for HeapName
 where
     P: Copy + TryFrom<usize> + Into<usize>,
 {
-    fn from(wire: WireLabels<'_, P>) -> HeapName {
+    fn from(wire: &WireLabels<'_, P>) -> HeapName {
         let mut vec = vec![0; wire.heap_len()];
         let labs = wire.labs();
         vec[0] = labs as u8;
@@ -168,6 +174,15 @@ where
         }
         // SAFETY: see [`HeapName`] under "Safety"
         unsafe { HeapName::from_vec(vec) }
+    }
+}
+
+impl<P> From<WireLabels<'_, P>> for HeapName
+where
+    P: Copy + TryFrom<usize> + Into<usize>,
+{
+    fn from(wire: WireLabels<'_, P>) -> HeapName {
+        HeapName::from(&wire)
     }
 }
 

@@ -1,6 +1,5 @@
 pub use crate::bmpvec::*;
 pub use crate::dnsname::*;
-pub use crate::error::*;
 pub use crate::scratchpad::*;
 pub use crate::triebits::*;
 

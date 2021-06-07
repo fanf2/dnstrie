@@ -28,3 +28,9 @@ name = "bmpvec"
 path = "src/bmpvec.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "dnsname"
+path = "src/dnsname.rs"
+test = false
+doc = false

@@ -83,7 +83,11 @@ where
     ) -> Result<()> {
         self.lpos.push(from_usize(pos)?)?;
         self.nlen += 1 + llen as usize;
-        Ok(())
+        if self.nlen > 255 {
+            Err(NameLength)
+        } else {
+            Ok(())
+        }
     }
 }
 
