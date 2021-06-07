@@ -1,6 +1,6 @@
 use crate::test::prelude::*;
 
-pub fn exercise_bytes(wire: &[u8]) {
+pub fn exercise_wire(wire: &[u8]) {
     if wire.len() < 1 {
         return;
     }
@@ -47,16 +47,42 @@ pub fn exercise_bytes(wire: &[u8]) {
     assert_eq!(heap3, heap4);
 }
 
+pub fn exercise_text(text: &[u8]) {
+    let utf8 = match std::str::from_utf8(text) {
+        Ok(ok) => ok,
+        Err(_) => return,
+    };
+    let mut scratch = ScratchName::new();
+    let len = match scratch.from_text(text) {
+        Ok(ok) => ok,
+        Err(_) => return,
+    };
+    let heap = match HeapName::try_from(&utf8[0..len]) {
+        Ok(ok) => ok,
+        Err(err) => panic!("unexpected error {:#?}", err),
+    };
+    assert_eq!(scratch, heap);
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test() {
+    fn test_wire() {
         let mut rand = [0u8; 1000];
         for _ in 0..100 {
             rand.fill_with(|| fastrand::u8(..));
-            exercise_bytes(&rand[..]);
+            exercise_wire(&rand[..]);
+        }
+    }
+
+    #[test]
+    fn test_text() {
+        let mut rand = [0u8; 1000];
+        for _ in 0..100 {
+            rand.fill_with(|| fastrand::u8(..));
+            exercise_text(&rand[..]);
         }
     }
 }

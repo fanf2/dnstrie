@@ -40,3 +40,9 @@ name = "dnsname"
 path = "src/dnsname.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "dnstext"
+path = "src/dnstext.rs"
+test = false
+doc = false
