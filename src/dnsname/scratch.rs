@@ -75,12 +75,6 @@ impl ScratchName {
         err
     }
 
-    pub fn from_wire(&mut self, wire: &[u8], pos: usize) -> Result<usize> {
-        let dodgy = Dodgy { bytes: wire };
-        self.clear();
-        self.dodgy_from_wire(dodgy, pos).map_err(|err| self.clear_err(err))
-    }
-
     pub fn from_text(&mut self, text: &[u8]) -> Result<usize> {
         let dodgy = Dodgy { bytes: text };
         self.clear();

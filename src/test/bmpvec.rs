@@ -6,6 +6,7 @@ pub enum Action {
     Insert(u8),
     Remove(u8),
     Get(u8),
+    GetMut(u8),
     Len,
     IsEmpty,
     BmpIter,
@@ -38,6 +39,19 @@ pub fn exercise_actions(actions: &[Action]) {
                 assert_eq!(bmp.remove(pos & 63), blimp.remove(pos & 63))
             }
             Get(pos) => assert_eq!(bmp.get(pos & 63), blimp.get(pos & 63)),
+            GetMut(pos) => {
+                let bmp_mut = bmp.get_mut(pos & 63);
+                let blimp_mut = blimp.get_mut(pos & 63);
+                match (bmp_mut, blimp_mut) {
+                    (None, None) => (),
+                    (Some(bmp_ptr), Some(blimp_ptr)) => {
+                        assert_eq!(*bmp_ptr, *blimp_ptr);
+                        *bmp_ptr = pos;
+                        *blimp_ptr = pos;
+                    }
+                    (bmp_opt, blimp_opt) => assert_eq!(bmp_opt, blimp_opt),
+                }
+            }
             Len => assert_eq!(bmp.len(), blimp.len()),
             IsEmpty => assert_eq!(bmp.is_empty(), blimp.is_empty()),
             BmpIter => {
@@ -74,7 +88,7 @@ pub fn exercise_actions(actions: &[Action]) {
                 assert_eq!(&bmptxt[3..], &blimptxt[5..]);
             }
             Clear => {
-                for pos in 0..=63 {
+                for pos in 0u8..=63u8 {
                     assert_eq!(bmp.remove(pos), blimp.remove(pos));
                 }
             }

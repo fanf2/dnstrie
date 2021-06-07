@@ -529,6 +529,6 @@ mod test {
     #[should_panic]
     fn oob_panic() {
         let mut bmp = BmpVec::new();
-        bmp.insert(64, "wat");
+        bmp.insert(64u8, "wat");
     }
 }
