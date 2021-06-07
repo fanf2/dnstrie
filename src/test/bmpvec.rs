@@ -89,7 +89,7 @@ mod test {
 
     #[test]
     fn test() -> Result<()> {
-        type Actions = [Action; 100];
+        type Actions = [Action; 1000];
         let (min, max) = Actions::size_hint(0);
         let bytes = max.unwrap_or(min);
         let r: Vec<u8> = repeat_with(|| fastrand::u8(..)).take(bytes).collect();

@@ -1,6 +1,7 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
+use dnstrie::test::prelude::*;
 
-fuzz_target!(|actions: Vec<dnstrie::test::bmpvec::Action>| {
-    dnstrie::test::bmpvec::exercise(&actions[..]);
+fuzz_target!(|actions: Vec<bmpvec::Action>| {
+    bmpvec::exercise(&actions[..]);
 });
