@@ -24,6 +24,12 @@ features = ["test"]
 members = ["."]
 
 [[bin]]
+name = "all"
+path = "src/all.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "bmpvec"
 path = "src/bmpvec.rs"
 test = false

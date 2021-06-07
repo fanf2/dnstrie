@@ -8,7 +8,7 @@ it:
 	cargo run
 
 cover:
-	util/cover bmpvec
+	util/cover all
 
 fuzz:
-	cargo +nightly fuzz run bmpvec
+	cargo +nightly fuzz run all
