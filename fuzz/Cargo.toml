@@ -8,8 +8,12 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
-[dependencies]
-libfuzzer-sys = "0.4"
+[dependencies.libfuzzer-sys]
+version = "*"
+
+[dependencies.arbitrary]
+version = "*"
+features = ["derive"]
 
 [dependencies.dnstrie]
 path = ".."

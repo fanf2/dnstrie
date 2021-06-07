@@ -1,77 +1,100 @@
 use crate::test::prelude::*;
 
-pub fn exercise(data: &[u8]) {
+#[derive(Arbitrary, Copy, Clone, Debug)]
+pub enum Action {
+    Contains(u8),
+    Insert(u8),
+    Remove(u8),
+    Get(u8),
+    Len,
+    IsEmpty,
+    BmpIter,
+    BlimpIter,
+    Keys,
+    Values,
+    FromBlimp,
+    FromBmp,
+    Format,
+    Clear,
+}
+
+use Action::*;
+
+pub fn exercise(actions: &[Action]) {
     let mut bmp = BmpVec::new();
     let mut blimp = BlimpVec::new();
-
-    for byte in data {
-        let pos = byte & 63;
-        match byte >> 6 {
-            0 => {
-                assert_eq!(bmp.insert(pos, pos), blimp.insert(pos, pos));
+    for &action in actions {
+        match action {
+            Contains(pos) => {
+                assert_eq!(bmp.contains(pos & 63), blimp.contains(pos & 63))
             }
-            1 => {
-                assert_eq!(bmp.remove(pos), blimp.remove(pos));
+            Insert(pos) => {
+                assert_eq!(
+                    bmp.insert(pos & 63, pos),
+                    blimp.insert(pos & 63, pos)
+                )
             }
-            2 => {
-                assert_eq!(bmp.get(pos), blimp.get(pos));
+            Remove(pos) => {
+                assert_eq!(bmp.remove(pos & 63), blimp.remove(pos & 63))
             }
-            _ => match byte % 11 {
-                0 => assert_eq!(bmp.len(), blimp.len()),
-                1 => assert_eq!(bmp.is_empty(), blimp.is_empty()),
-                2 => assert_eq!(bmp.contains(pos), blimp.contains(pos)),
-                3 => {
-                    for (pos, elem) in bmp.iter() {
-                        assert_eq!(Some(elem), blimp.get(pos));
-                    }
+            Get(pos) => assert_eq!(bmp.get(pos & 63), blimp.get(pos & 63)),
+            Len => assert_eq!(bmp.len(), blimp.len()),
+            IsEmpty => assert_eq!(bmp.is_empty(), blimp.is_empty()),
+            BmpIter => {
+                for (pos, elem) in bmp.iter() {
+                    assert_eq!(Some(elem), blimp.get(pos));
                 }
-                4 => {
-                    for (pos, elem) in blimp.iter() {
-                        assert_eq!(Some(elem), bmp.get(pos));
-                    }
+            }
+            BlimpIter => {
+                for (pos, elem) in blimp.iter() {
+                    assert_eq!(Some(elem), bmp.get(pos));
                 }
-                5 => {
-                    let bmp_keys: Vec<u8> = bmp.keys().collect();
-                    let blimp_keys: Vec<u8> = blimp.keys().collect();
-                    assert_eq!(bmp_keys, blimp_keys);
+            }
+            Keys => {
+                let bmp_keys: Vec<u8> = bmp.keys().collect();
+                let blimp_keys: Vec<u8> = blimp.keys().collect();
+                assert_eq!(bmp_keys, blimp_keys);
+            }
+            Values => {
+                let bmp_values: Vec<u8> = bmp.values().copied().collect();
+                let blimp_values: Vec<u8> = blimp.values().copied().collect();
+                assert_eq!(bmp_values, blimp_values);
+            }
+            FromBlimp => {
+                let from_blimp = BmpVec::from(&blimp);
+                assert_eq!(bmp, from_blimp);
+            }
+            FromBmp => {
+                let from_bmp = BlimpVec::from(&bmp);
+                assert_eq!(from_bmp, blimp);
+            }
+            Format => {
+                let bmptxt = format!("{:?}", &bmp);
+                let blimptxt = format!("{:?}", &blimp);
+                assert_eq!(&bmptxt[3..], &blimptxt[5..]);
+            }
+            Clear => {
+                for pos in 0..=63 {
+                    assert_eq!(bmp.remove(pos), blimp.remove(pos));
                 }
-                6 => {
-                    let bmp_values: Vec<u8> = bmp.values().copied().collect();
-                    let blimp_values: Vec<u8> =
-                        blimp.values().copied().collect();
-                    assert_eq!(bmp_values, blimp_values);
-                }
-                7 => {
-                    let from_blimp = BmpVec::from(&blimp);
-                    assert_eq!(bmp, from_blimp);
-                }
-                8 => {
-                    let from_bmp = BlimpVec::from(&bmp);
-                    assert_eq!(from_bmp, blimp);
-                }
-                9 => {
-                    let bmptxt = format!("{:?}", &bmp);
-                    let blimptxt = format!("{:?}", &blimp);
-                    assert_eq!(&bmptxt[3..], &blimptxt[5..]);
-                }
-                10 => {
-                    for pos in 0..=63 {
-                        assert_eq!(bmp.remove(pos), blimp.remove(pos));
-                    }
-                }
-                _ => panic!("inconcievable!"),
-            },
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use std::iter::repeat_with;
 
     #[test]
-    fn test() {
-        let v: Vec<u8> = repeat_with(|| fastrand::u8(..)).take(1000).collect();
-        crate::test::bmpvec::exercise(&v[..]);
+    fn test() -> Result<()> {
+        type Actions = [Action; 100];
+        let (min, max) = Actions::size_hint(0);
+        let bytes = max.unwrap_or(min);
+        let r: Vec<u8> = repeat_with(|| fastrand::u8(..)).take(bytes).collect();
+        let a: Actions = Unstructured::new(&r[..]).arbitrary()?;
+        exercise(&a[..]);
+        Ok(())
     }
 }
