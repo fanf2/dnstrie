@@ -189,18 +189,4 @@ mod test {
             }
         }
     }
-
-    #[test]
-    fn invert() -> Result<()> {
-        let text = "dotat.at";
-        let name1 = HeapName::try_from(text)?;
-        eprintln!("{:#?}", name1);
-        let mut tkey = TrieName::new();
-        tkey.from_dns_name(&name1)?;
-        eprintln!("{:#?}", tkey);
-        let name2 = tkey.make_dns_name()?;
-        eprintln!("{:#?}", name2);
-        assert_eq!(name1, name2);
-        Ok(())
-    }
 }

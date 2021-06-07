@@ -1,3 +1,4 @@
+use crate::test::blimpvec::*;
 use crate::test::prelude::*;
 
 #[derive(Arbitrary, Copy, Clone, Debug)]

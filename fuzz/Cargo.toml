@@ -46,3 +46,9 @@ name = "dnstext"
 path = "src/dnstext.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "triebits"
+path = "src/triebits.rs"
+test = false
+doc = false
