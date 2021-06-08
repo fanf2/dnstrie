@@ -3,10 +3,13 @@
 
 use crate::prelude::*;
 
-//const SHIFT_BRANCH: u8 = 0;
-const SHIFT_NOBYTE: u8 = 1;
-const SHIFT_BITMAP: u8 = 2;
-const SHIFT_OFFSET: u8 = 48;
+pub const SHIFT_BRANCH: u8 = 0;
+pub const SHIFT_NOBYTE: u8 = 1;
+pub const SHIFT_BITMAP: u8 = 2;
+pub const SHIFT_OFFSET: u8 = 48;
+
+pub const BRANCH_TAG: u64 = 1 << SHIFT_BRANCH;
+pub const MASK_BMP: u64 = (1 << SHIFT_OFFSET) - 1 - BRANCH_TAG;
 
 // a slight over-estimate
 const MAX_TRIENAME: usize = MAX_NAME * 2 + 2;

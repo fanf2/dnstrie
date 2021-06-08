@@ -75,7 +75,7 @@ impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
         // SAFETY: we have initialized everything up to end, and we can't
         // mutate it again while there's a shared borrow; the origin of the
         // pointer means its alignment, size, and nullity are OK. To persuade
-        // Stacked Borrows that this is OK, we need to derive the pointer
+        // MIRI Stacked Borrows that this is OK, we need to derive the pointer
         // from a borrow that covers the whole of the `uninit` array.
         let ptr = &self.uninit[..] as *const [MaybeUninit<T>] as *const T;
         unsafe { std::slice::from_raw_parts(ptr, self.end) }

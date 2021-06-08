@@ -44,8 +44,7 @@ use crate::prelude::*;
 /// immutable so it remains safe.
 ///
 pub struct HeapName {
-    // We treat this memory as immutable except when it is dropped.
-    mem: *mut u8,
+    mem: *const u8,
     // NOTE: the marker tells dropck that we logically own some bytes
     _marker: PhantomData<u8>,
 }
@@ -56,16 +55,31 @@ impl HeapName {
     unsafe fn from_vec(vec: Vec<u8>) -> Self {
         let shrunk = vec.into_boxed_slice();
         let slice_ptr = Box::into_raw(shrunk);
-        let mem = slice_ptr as *mut u8;
+        HeapName::from_raw_parts(slice_ptr as *const u8)
+    }
+
+    /// # Safety
+    /// The argument must previously have been returned by
+    /// `HeapName::as_ptr()` or `HeapName::into_ptr()`
+    pub unsafe fn from_raw_parts(mem: *const u8) -> Self {
         HeapName { mem, _marker: PhantomData }
+    }
+
+    pub fn as_ptr(&self) -> *const u8 {
+        self.mem
+    }
+
+    pub fn into_ptr(self) -> *const u8 {
+        self.mem
     }
 }
 
 impl Drop for HeapName {
     fn drop(&mut self) {
+        let ptr = self.mem as *mut u8;
         let len = self.heap_len();
         // SAFETY: see [`HeapName`] under "Safety"
-        let _ = unsafe { Vec::from_raw_parts(self.mem, len, len) };
+        let _ = unsafe { Vec::from_raw_parts(ptr, len, len) };
     }
 }
 

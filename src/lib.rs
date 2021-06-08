@@ -6,6 +6,7 @@ pub use crate::triebits::*;
 pub mod bmpvec;
 pub mod dnsname;
 pub mod error;
+pub mod qptrie;
 pub mod scratchpad;
 pub mod triebits;
 
