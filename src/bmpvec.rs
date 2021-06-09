@@ -76,106 +76,135 @@ unsafe impl<'t, T: Send> Send for BmpSlice<'t, T> {}
 /// read-only borrow.
 unsafe impl<'t, T: Sync> Sync for BmpSlice<'t, T> {}
 
-macro_rules! get_ptr {
-    ($this:ident, $pos:ident, $as_ref:ident) => {
-        bitmask($pos)
-            .filter(|&(bit, _)| $this.bmp & bit)
-            .map(|(_, mask)| $this.ptr.add($this.bmp & mask))
-            .and_then(|ptr| ptr.$as_ref())
-    };
+pub trait ReadBmpVec<'t, T, Ptr> {
+    /// Returns `true` if there are no elementss in the `BmpVec`
+    ///
+    fn is_empty(&self) -> bool {
+        self.as_cooked_parts().0.is_empty()
+    }
+
+    /// Returns the number of elementss in the `BmpVec`
+    ///
+    fn len(&self) -> usize {
+        self.as_cooked_parts().0.len()
+    }
+
+    /// An iterator visiting the position of each element in the `BmpVec`,
+    /// from 0 through 63.
+    fn keys(&self) -> bmp::Iter {
+        self.as_cooked_parts().0.iter()
+    }
+
+    /// An iterator visiting each element in the `BmpVec`.
+    fn values(&self) -> std::slice::Iter<T> {
+        self.as_cooked_parts().1.iter()
+    }
+
+    /// An iterator visiting the position and value of each element in the `BmpVec`.
+    fn iter(&self) -> Iter<T> {
+        Iter { keys: self.keys(), vals: self.values() }
+    }
+
+    /// Returns `true` if there is an element at the given `pos`ition.
+    ///
+    fn contains<N>(&self, pos: N) -> bool
+    where
+        N: TryInto<u8>,
+    {
+        let (bmp, _) = self.as_cooked_parts();
+        bitmask(pos).map_or(false, |(bit, _)| bmp & bit)
+    }
+
+    /// Get a reference to an element in the `BmpVec`
+    ///
+    /// This returns `None` if there is no element at `pos`.
+    ///
+    fn get<N>(&self, pos: N) -> Option<&T>
+    where
+        N: TryInto<u8>;
+
+    /// Get a raw pointer to an element in the `BmpVec`
+    ///
+    /// This returns `None` if there is no element at `pos`.
+    ///
+    /// # Safety
+    ///
+    /// This function contains the unsafe parts of the `get()` and
+    /// `get_mut()` methods, which you should use instead of calling
+    /// this directly.
+    ///
+    /// When converting the raw pointer to a ref, the ref's ownership must be
+    /// consistent with `self`'s ownership.
+    ///
+    unsafe fn get_ptr<N>(&self, pos: N) -> Option<Ptr>
+    where
+        N: TryInto<u8>;
+
+    /// Expand a `BmpVec` or `BmpSlice` into a bitmap and a slice of elements
+    ///
+    fn as_cooked_parts(&self) -> (Bmp, &[T]);
+
+    /// Construct a `BmpVec` or `BmpSlice` from a raw bitmap and pointer.
+    ///
+    /// This is the inverse of [`BmpVec::into_raw_parts()`]
+    ///
+    /// # Safety
+    ///
+    /// This is highly unsafe, due to the number of invariants that aren’t
+    /// checked, as for [`Vec::from_raw_parts()`].
+    ///
+    /// The number of bits set in `bmp` must be equal to both the length and
+    /// capacity of the allocation at `ptr`.
+    ///
+    /// The ownership of ptr is transferred to the `BmpVec`.
+    ///
+    unsafe fn from_raw_parts(bmp: u64, ptr: Ptr) -> Self;
+
+    /// Unpack a `BmpVec` or `BmpSlice` into a raw bitmap and pointer.
+    ///
+    /// This consumes the `BitVec`.
+    ///
+    /// # Safety
+    ///
+    /// After calling this function, the caller is responsible for the memory
+    /// previously managed by the `BmpVec`. The only way to do this is to
+    /// convert the raw parts back using [`BmpVec::from_raw_parts()`]
+    ///
+    unsafe fn into_raw_parts(self) -> (u64, Ptr);
 }
 
-macro_rules! impl_bmp_slice {
-    ($ptr:ident) => {
-        /// Returns `true` if there are no elementss in the `BmpVec`
-        ///
-        pub fn is_empty(&self) -> bool {
-            self.bmp.is_empty()
-        }
-
-        /// Returns the number of elementss in the `BmpVec`
-        ///
-        pub fn len(&self) -> usize {
-            self.bmp.len()
-        }
-
-        /// An iterator visiting the position of each element in the `BmpVec`,
-        /// from 0 through 63.
-        pub fn keys(&self) -> bmp::Iter {
-            self.bmp.iter()
-        }
-
-        /// An iterator visiting each element in the `BmpVec`.
-        pub fn values(&self) -> std::slice::Iter<T> {
-            let (_, slice) = self.borrow_cooked_parts();
-            slice.iter()
-        }
-
-        /// An iterator visiting the position and value of each element in the `BmpVec`.
-        pub fn iter(&self) -> Iter<T> {
-            Iter { keys: self.keys(), vals: self.values() }
-        }
-
-        /// Returns `true` if there is an element at the given `pos`ition.
-        ///
-        pub fn contains<N>(&self, pos: N) -> bool
+macro_rules! impl_read_bmp_vec {
+    ($ptr:ty) => {
+        fn get<N>(&self, pos: N) -> Option<&T>
         where
             N: TryInto<u8>,
         {
-            bitmask(pos).map_or(false, |(bit, _)| self.bmp & bit)
-        }
-
-        /// Get a reference to an element in the `BmpVec`
-        ///
-        /// This returns `None` if there is no element at `pos`.
-        ///
-        pub fn get<N>(&self, pos: N) -> Option<&T>
-        where
-            N: TryInto<u8>,
-        {
-            // SAFETY: get_ptr!() returns us a valid pointer, and we ensure the
+            // SAFETY: get_ptr() returns us a valid pointer, and we ensure the
             // mutability of the resulting ref matches self's mutability
-            unsafe { get_ptr!(self, pos, as_ref) }
+            unsafe { self.get_ptr(pos).and_then(|ptr| ptr.as_ref()) }
         }
 
-        /// Expand a `BmpVec` or `BmpSlice` into a bitmap and a slice of elements
-        ///
-        fn borrow_cooked_parts(&self) -> (Bmp, &[T]) {
+        unsafe fn get_ptr<N>(&self, pos: N) -> Option<$ptr>
+        where
+            N: TryInto<u8>,
+        {
+            bitmask(pos)
+                .filter(|&(bit, _)| self.bmp & bit)
+                .map(|(_, mask)| self.ptr.add(self.bmp & mask))
+        }
+
+        fn as_cooked_parts(&self) -> (Bmp, &[T]) {
             let len = self.bmp.len();
             // SAFETY: we guarantee that our length matches the allocation
             (self.bmp, unsafe { std::slice::from_raw_parts(self.ptr, len) })
         }
 
-        /// Construct a `BmpVec` or `BmpSlice` from a raw bitmap and pointer.
-        ///
-        /// This is the inverse of [`BmpVec::into_raw_parts()`]
-        ///
-        /// # Safety
-        ///
-        /// This is highly unsafe, due to the number of invariants that aren’t
-        /// checked, as for [`Vec::from_raw_parts()`].
-        ///
-        /// The number of bits set in `bmp` must be equal to both the length and
-        /// capacity of the allocation at `ptr`.
-        ///
-        /// The ownership of ptr is transferred to the `BmpVec`.
-        ///
-        pub unsafe fn from_raw_parts(bmp: u64, ptr: *$ptr T) -> Self {
+        unsafe fn from_raw_parts(bmp: u64, ptr: $ptr) -> Self {
             let bmp = Bmp::from_raw_parts(bmp);
             Self { bmp, ptr, _marker: PhantomData }
         }
 
-        /// Unpack a `BmpVec` or `BmpSlice` into a raw bitmap and pointer.
-        ///
-        /// This consumes the `BitVec`.
-        ///
-        /// # Safety
-        ///
-        /// After calling this function, the caller is responsible for the memory
-        /// previously managed by the `BmpVec`. The only way to do this is to
-        /// convert the raw parts back using [`BmpVec::from_raw_parts()`]
-        ///
-        pub unsafe fn into_raw_parts(self) -> (u64, *$ptr T) {
+        unsafe fn into_raw_parts(self) -> (u64, $ptr) {
             let (bmp, ptr) = (self.bmp.into_raw_parts(), self.ptr);
             std::mem::forget(self); // avoid double free
             (bmp, ptr)
@@ -183,9 +212,15 @@ macro_rules! impl_bmp_slice {
     };
 }
 
-impl<'t, T> BmpSlice<'t, T> {
-    impl_bmp_slice!(const);
+impl<'t, T> ReadBmpVec<'t, T, *mut T> for BmpVec<T> {
+    impl_read_bmp_vec!(*mut T);
+}
 
+impl<'t, T> ReadBmpVec<'t, T, *const T> for BmpSlice<'t, T> {
+    impl_read_bmp_vec!(*const T);
+}
+
+impl<'t, T> BmpSlice<'t, T> {
     /// Construct a `BmpSlice` from a pair of a bitmap and slice.
     ///
     /// # Panics
@@ -207,11 +242,9 @@ impl<T> BmpVec<T> {
     }
 
     pub fn borrow(&self) -> BmpSlice<T> {
-        let (bmp, slice) = self.borrow_cooked_parts();
+        let (bmp, slice) = self.as_cooked_parts();
         BmpSlice::from_cooked_parts(bmp, slice)
     }
-
-    impl_bmp_slice!(mut);
 
     /// Get a mutable reference to an element in the `BmpVec`
     ///
@@ -223,7 +256,7 @@ impl<T> BmpVec<T> {
     {
         // SAFETY: get_ptr() returns us a valid pointer, and we ensure the
         // mutability of the resulting ref matches self's mutability
-        unsafe { get_ptr!(self, pos, as_mut) }
+        unsafe { self.get_ptr(pos).and_then(|ptr| ptr.as_mut()) }
     }
 
     /// Set the `val`ue of the element at the given `pos`ition.
@@ -367,24 +400,21 @@ impl<'a, T> IntoIterator for &'a BmpVec<T> {
     }
 }
 
-// where
-//     T: std::cmp::PartialEq,
-// {
-//     fn eq(&self, other: &Self) -> bool {
-//         let (this_bmp, this_slice) = self.borrow_cooked_parts();
-//         let (that_bmp, that_slice) = other.borrow_cooked_parts();
-//         this_bmp == that_bmp && this_slice == that_slice
-//     }
-// }
+impl<'t, T> std::cmp::PartialEq for BmpSlice<'t, T>
+where
+    T: std::cmp::PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.as_cooked_parts() == other.as_cooked_parts()
+    }
+}
 
 impl<T> std::cmp::PartialEq for BmpVec<T>
 where
     T: std::cmp::PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        let (this_bmp, this_slice) = self.borrow_cooked_parts();
-        let (that_bmp, that_slice) = other.borrow_cooked_parts();
-        this_bmp == that_bmp && this_slice == that_slice
+        self.borrow() == other.borrow()
     }
 }
 
