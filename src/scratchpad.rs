@@ -18,12 +18,17 @@
 use crate::prelude::*;
 use core::mem::MaybeUninit;
 
-pub struct ScratchPad<T, const SIZE: usize> {
+// SAFETY: The element type must be Copy so that we don't need to do anything
+// special to drop it.
+pub struct ScratchPad<T, const SIZE: usize>
+where
+    T: Copy,
+{
     uninit: [MaybeUninit<T>; SIZE],
     end: usize,
 }
 
-impl<T, const SIZE: usize> Default for ScratchPad<T, SIZE> {
+impl<T: Copy, const SIZE: usize> Default for ScratchPad<T, SIZE> {
     #[inline(always)]
     fn default() -> Self {
         Self::new()
@@ -32,7 +37,7 @@ impl<T, const SIZE: usize> Default for ScratchPad<T, SIZE> {
 
 impl<T, const SIZE: usize> std::fmt::Debug for ScratchPad<T, SIZE>
 where
-    T: std::fmt::Debug,
+    T: std::fmt::Debug + Copy,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = std::any::type_name::<T>();
@@ -42,7 +47,7 @@ where
     }
 }
 
-impl<T, const SIZE: usize> ScratchPad<T, SIZE> {
+impl<T: Copy, const SIZE: usize> ScratchPad<T, SIZE> {
     /// Create a new empty scratch pad.
     #[inline(always)]
     pub fn new() -> Self {

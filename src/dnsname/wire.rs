@@ -13,7 +13,10 @@
 use crate::prelude::*;
 
 #[derive(Debug, Default)]
-pub struct WireLabels<'w, P> {
+pub struct WireLabels<'w, P>
+where
+    P: Copy,
+{
     lpos: ScratchPad<P, MAX_LABS>,
     nlen: usize,
     wire: Option<&'w [u8]>,
