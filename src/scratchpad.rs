@@ -18,10 +18,13 @@
 use crate::prelude::*;
 use core::mem::MaybeUninit;
 
-// SAFETY: The element type must be Copy so that we don't need to do anything
-// special to drop it.
+/// An append-only fixed-size memory area that avoids
+/// initializing the elements before they are added.
+///
 pub struct ScratchPad<T, const SIZE: usize>
 where
+    // SAFETY: The element type must be Copy so that we don't need to do
+    // anything special to drop it.
     T: Copy,
 {
     uninit: [MaybeUninit<T>; SIZE],
@@ -69,7 +72,7 @@ impl<T: Copy, const SIZE: usize> ScratchPad<T, SIZE> {
         self.end == 0
     }
 
-    /// The number of initialized elements in the scratch pad.
+    /// Get the number of initialized elements in the scratch pad.
     pub fn len(&self) -> usize {
         self.end
     }
@@ -91,6 +94,7 @@ impl<T: Copy, const SIZE: usize> ScratchPad<T, SIZE> {
         Ok(self.uninit.get_mut(pos).ok_or(ScratchOverflow)?.as_mut_ptr())
     }
 
+    /// Copy several elements to the end of the scratch pad.
     #[inline(always)]
     pub fn append(&mut self, elems: &[T]) -> Result<()> {
         let len = elems.len();
@@ -104,6 +108,7 @@ impl<T: Copy, const SIZE: usize> ScratchPad<T, SIZE> {
         Ok(())
     }
 
+    /// Copy a single element to the end of the scratch pad.
     #[inline(always)]
     pub fn push(&mut self, elem: T) -> Result<()> {
         let ptr = self.get_mut(self.end)?;

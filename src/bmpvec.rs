@@ -1,9 +1,12 @@
 //! Short bitmap-packed vectors
 //! ===========================
 //!
-//! A [`BmpVec`] is a sparse vector of up to 64 elements. It only stores the
-//! elements that are present, not the gaps between them. A bitmap ("bmp" for
-//! short) indicates which elements are present or not.
+//! A [`BmpVec`] is a mutable sparse vector of up to 64 elements. It only
+//! stores the elements that are present, not the gaps between them. A bitmap
+//! ("bmp" for short) indicates which elements are present or not.
+//!
+//! A [`BmpSlice`] is an immutable borrow of a [`BmpVec`]. The [`ReadBmpVec`]
+//! trait contains the read-only methods shared by both types.
 //!
 //! There is a trick to find an element in the underlying vector: create a
 //! bitmask covering the bits in the bitmap less than the element we are
@@ -19,6 +22,9 @@ use crate::prelude::*;
 use bmp::*;
 
 /// A [`BmpVec`] is a sparse vector of up to 64 elements.
+///
+/// See the [`ReadBmpVec`] trait for the read-only methods of a [`BmpVec`],
+/// which are also implemented by [`BmpSlice`].
 ///
 /// The elements are numbered from 0 through 63.
 ///
@@ -60,6 +66,9 @@ impl<T> Default for BmpVec<T> {
 
 /// A [`BmpSlice`] the read-only counterpart of a [`BmpVec`]
 ///
+/// See the [`ReadBmpVec`] trait for the public methods of a [`BmpSlice`],
+/// which are also implemented by [`BmpVec`].
+///
 #[derive(Copy, Clone)]
 pub struct BmpSlice<'t, T> {
     bmp: Bmp,
@@ -76,31 +85,41 @@ unsafe impl<'t, T: Send> Send for BmpSlice<'t, T> {}
 /// read-only borrow.
 unsafe impl<'t, T: Sync> Sync for BmpSlice<'t, T> {}
 
+/// The read-only methods shared by [`BmpVec`] and [`BmpSlice`].
+///
 pub trait ReadBmpVec<'t, T, Ptr> {
-    /// Returns `true` if there are no elementss in the `BmpVec`
+    /// Borrow a [`BmpVec`] as a read-only [`BmpSlice`]
+    fn borrow(&self) -> BmpSlice<T> {
+        let (bmp, slice) = self.as_cooked_parts();
+        BmpSlice::from_cooked_parts(bmp, slice)
+    }
+
+    /// Returns `true` if there are no elementss in the `BmpVec` or
+    /// `BmpSlice`
     ///
     fn is_empty(&self) -> bool {
         self.as_cooked_parts().0.is_empty()
     }
 
-    /// Returns the number of elementss in the `BmpVec`
+    /// Returns the number of elementss in the `BmpVec` or `BmpSlice`
     ///
     fn len(&self) -> usize {
         self.as_cooked_parts().0.len()
     }
 
-    /// An iterator visiting the position of each element in the `BmpVec`,
-    /// from 0 through 63.
+    /// An iterator visiting the position of each element in the `BmpVec` or
+    /// `BmpSlice`, from 0 through 63.
     fn keys(&self) -> bmp::Iter {
         self.as_cooked_parts().0.iter()
     }
 
-    /// An iterator visiting each element in the `BmpVec`.
+    /// An iterator visiting each element in the `BmpVec` or `BmpSlice`.
     fn values(&self) -> std::slice::Iter<T> {
         self.as_cooked_parts().1.iter()
     }
 
-    /// An iterator visiting the position and value of each element in the `BmpVec`.
+    /// An iterator visiting the position and value of each element in the
+    /// `BmpVec` or `BmpSlice`.
     fn iter(&self) -> Iter<T> {
         Iter { keys: self.keys(), vals: self.values() }
     }
@@ -132,9 +151,6 @@ pub trait ReadBmpVec<'t, T, Ptr> {
     /// This function contains the unsafe parts of the `get()` and
     /// `get_mut()` methods, which you should use instead of calling
     /// this directly.
-    ///
-    /// When converting the raw pointer to a ref, the ref's ownership must be
-    /// consistent with `self`'s ownership.
     ///
     unsafe fn get_ptr<N>(&self, pos: N) -> Option<Ptr>
     where
@@ -173,6 +189,18 @@ pub trait ReadBmpVec<'t, T, Ptr> {
     unsafe fn into_raw_parts(self) -> (u64, Ptr);
 }
 
+// These methods depend on certain concrete types, so they can't
+// be written as trait methods.
+//
+// Accessing `self.bmp` and `self.ptr` depends on the concrete
+// type of `self`; we abstracted out `self.bmp` above by using
+// `self.as_cooked_parts()`, but `self.ptr` has variable
+// mutability and we can't easily be generic over that.
+//
+// For example, `ptr.as_ref()` is an inherent method, not a
+// trait method. Its mutability depends on the return type from
+// get_ptr(), which depends on the type of `self`.
+//
 macro_rules! impl_read_bmp_vec {
     ($ptr:ty) => {
         fn get<N>(&self, pos: N) -> Option<&T>
@@ -239,11 +267,6 @@ impl<T> BmpVec<T> {
     /// Constructs a new, empty `BmpVec`.
     pub fn new() -> BmpVec<T> {
         BmpVec::from_cooked_parts(Bmp::new(), Vec::new())
-    }
-
-    pub fn borrow(&self) -> BmpSlice<T> {
-        let (bmp, slice) = self.as_cooked_parts();
-        BmpSlice::from_cooked_parts(bmp, slice)
     }
 
     /// Get a mutable reference to an element in the `BmpVec`
@@ -373,9 +396,9 @@ impl<T> BmpVec<T> {
     }
 }
 
-/// An iterator visiting each element in a `BmpVec`.
+/// An iterator visiting each element in a [`BmpVec`] or [`BmpSlice`].
 ///
-/// Returned by [`BmpVec::iter()`]
+/// Returned by [`BmpVec::iter()`] and [`BmpSlice::iter()`]
 ///
 pub struct Iter<'t, T> {
     keys: bmp::Iter,
@@ -392,10 +415,18 @@ impl<'t, T> Iterator for Iter<'t, T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a BmpVec<T> {
-    type Item = (u8, &'a T);
-    type IntoIter = Iter<'a, T>;
-    fn into_iter(self) -> Iter<'a, T> {
+impl<'s, T> IntoIterator for &'s BmpVec<T> {
+    type Item = (u8, &'s T);
+    type IntoIter = Iter<'s, T>;
+    fn into_iter(self) -> Iter<'s, T> {
+        self.iter()
+    }
+}
+
+impl<'t, T> IntoIterator for &'t BmpSlice<'t, T> {
+    type Item = (u8, &'t T);
+    type IntoIter = Iter<'t, T>;
+    fn into_iter(self) -> Iter<'t, T> {
         self.iter()
     }
 }
@@ -414,7 +445,20 @@ where
     T: std::cmp::PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.borrow() == other.borrow()
+        self.as_cooked_parts() == other.as_cooked_parts()
+    }
+}
+
+impl<'t, T> std::fmt::Debug for BmpSlice<'t, T>
+where
+    T: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (bmp, slice) = self.as_cooked_parts();
+        f.debug_struct("BmpSlice")
+            .field("bmp", &bmp)
+            .field("values", &slice)
+            .finish()
     }
 }
 
@@ -423,8 +467,11 @@ where
     T: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BmpVec")?;
-        f.debug_map().entries(self).finish()
+        let (bmp, slice) = self.as_cooked_parts();
+        f.debug_struct("BmpVec")
+            .field("bmp", &bmp)
+            .field("values", &slice)
+            .finish()
     }
 }
 
