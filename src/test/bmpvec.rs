@@ -99,7 +99,7 @@ pub fn exercise_actions(actions: &[Action]) {
 
 pub fn exercise_bytes(bytes: &[u8]) {
     let a: Vec<Action> = Unstructured::new(bytes)
-        .arbitrary_iter()
+        .arbitrary_take_rest_iter()
         .unwrap()
         .map(|e| e.unwrap())
         .collect();

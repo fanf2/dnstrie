@@ -3,20 +3,20 @@ use dnstrie::test::prelude::*;
 use libfuzzer_sys::fuzz_target;
 
 #[derive(Arbitrary, Debug)]
-enum Action<'a> {
-    BmpVec(&'a [u8]),
-    DnsName(&'a [u8]),
-    DnsText(&'a [u8]),
-    TrieBits(&'a [u8]),
+enum Fuzz<'a> {
+    FuzzBmpVec(&'a [u8]),
+    FuzzDnsName(&'a [u8]),
+    FuzzDnsText(&'a [u8]),
+    FuzzTrieBits(&'a [u8]),
 }
 
-use Action::*;
+use Fuzz::*;
 
-fuzz_target!(|action: Action| {
+fuzz_target!(|action: Fuzz| {
     match action {
-        BmpVec(bytes) => bmpvec::exercise_bytes(bytes),
-        DnsName(bytes) => dnsname::exercise_wire(bytes),
-        DnsText(bytes) => dnsname::exercise_text(bytes),
-        TrieBits(bytes) => triebits::exercise_bytes(bytes),
+        FuzzBmpVec(bytes) => bmpvec::exercise_bytes(bytes),
+        FuzzDnsName(bytes) => dnsname::exercise_wire(bytes),
+        FuzzDnsText(bytes) => dnsname::exercise_text(bytes),
+        FuzzTrieBits(bytes) => triebits::exercise_bytes(bytes),
     }
 });

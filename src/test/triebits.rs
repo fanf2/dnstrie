@@ -1,18 +1,18 @@
 use crate::test::prelude::*;
 
 #[derive(Arbitrary, Clone, Debug)]
-pub struct Slices<'a> {
-    one: &'a [u8],
-    two: &'a [u8],
+pub struct Vecs {
+    one: Vec<u8>,
+    two: Vec<u8>,
 }
 
-pub fn exercise_slices(slices: Slices) {
+pub fn exercise_vecs(vecs: Vecs) {
     let mut scratch1 = ScratchName::new();
     let mut scratch2 = ScratchName::new();
-    if let Err(_) = scratch1.from_wire(slices.one, 0) {
+    if let Err(_) = scratch1.from_wire(&vecs.one[..], 0) {
         return;
     }
-    if let Err(_) = scratch2.from_wire(slices.two, 0) {
+    if let Err(_) = scratch2.from_wire(&vecs.two[..], 0) {
         return;
     }
     let scratch_ord = scratch1.cmp(&scratch2);
@@ -32,9 +32,28 @@ pub fn exercise_slices(slices: Slices) {
     assert_eq!(slice_ord, heap_ord);
 }
 
+// make a vec more likely to look like a wire format DNS name
+fn nominate(v: &mut Vec<u8>) {
+    let mut pos = 0;
+    let mut len = 0;
+    while pos < MAX_NAME && pos < v.len() {
+        len = 0x3F & v[pos] as usize;
+        v[pos] = len as u8;
+        pos += 1 + len;
+        if len == 0 {
+            return;
+        }
+    }
+    if len > 0 {
+        v[pos - len - 1] = 0;
+    }
+}
+
 pub fn exercise_bytes(bytes: &[u8]) {
-    let slices = Unstructured::new(bytes).arbitrary().unwrap();
-    exercise_slices(slices);
+    let mut vecs: Vecs = Unstructured::new(bytes).arbitrary().unwrap();
+    nominate(&mut vecs.one);
+    nominate(&mut vecs.two);
+    exercise_vecs(vecs);
 }
 
 #[cfg(test)]
@@ -44,7 +63,7 @@ mod test {
     #[test]
     fn test() {
         let mut rand = [0u8; 1000];
-        for _ in 0..100 {
+        for _ in 0..1000 {
             rand.fill_with(|| fastrand::u8(..));
             exercise_bytes(&rand[..]);
         }

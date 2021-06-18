@@ -124,8 +124,21 @@ where
     T: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BlimpVec")?;
-        f.debug_map().entries(self.iter()).finish()
+        let values: Vec<&T> = self.values().collect();
+        let bmp = self.keys().fold(0u64, |bmp, bit| bmp | 1 << bit);
+        f.debug_struct("BlimpVec")
+            .field("bmp", &Bmp(bmp))
+            .field("values", &&values[..])
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct Bmp(pub u64);
+
+impl std::fmt::Debug for Bmp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Bmp").field(&format_args!("{:064b})", self.0)).finish()
     }
 }
 
