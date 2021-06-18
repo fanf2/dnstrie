@@ -44,8 +44,8 @@
 //!     how much the name expands due to escaping, so this requires
 //!     two passes, but we want to avoid any more than that.
 //!
-//! We use [`ScratchPad`][crate::scratchpad::ScratchPad]s to make
-//! these reformatted names without allocating.
+//! We use [`arrayvec::ArrayVec`]s to make these reformatted names without
+//! allocating.
 
 use crate::prelude::*;
 use core::cmp::max;

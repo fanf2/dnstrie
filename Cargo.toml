@@ -24,6 +24,9 @@ version = "*"
 version = "*"
 optional = true
 
+[dependencies.arrayvec]
+version = "*"
+
 [dependencies.fastrand]
 version = "*"
 optional = true

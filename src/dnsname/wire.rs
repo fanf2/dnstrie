@@ -17,7 +17,7 @@ pub struct WireLabels<'w, P>
 where
     P: Copy,
 {
-    lpos: ScratchPad<P, MAX_LABS>,
+    lpos: ArrayVec<P, MAX_LABS>,
     nlen: usize,
     wire: Option<&'w [u8]>,
 }
@@ -28,7 +28,7 @@ where
 {
     #[inline(always)]
     pub fn new() -> Self {
-        WireLabels { lpos: ScratchPad::new(), nlen: 0, wire: None }
+        WireLabels { lpos: ArrayVec::new(), nlen: 0, wire: None }
     }
 
     pub fn clear(&mut self) {
@@ -84,7 +84,7 @@ where
         pos: usize,
         llen: u8,
     ) -> Result<()> {
-        self.lpos.push(from_usize(pos)?)?;
+        self.lpos.try_push(from_usize(pos)?)?;
         self.nlen += 1 + llen as usize;
         if self.nlen > 255 {
             Err(NameLength)

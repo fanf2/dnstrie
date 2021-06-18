@@ -22,13 +22,13 @@ pub const BITS_TO_BYTE: [[u8; 48]; 48] = gen_bits_to_byte();
 
 #[derive(Debug, Default)]
 pub struct TrieName {
-    key: ScratchPad<u8, MAX_TRIENAME>,
+    key: ArrayVec<u8, MAX_TRIENAME>,
 }
 
 impl TrieName {
     #[inline(always)]
     pub fn new() -> Self {
-        TrieName { key: ScratchPad::new() }
+        TrieName { key: ArrayVec::new() }
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -48,15 +48,16 @@ impl TrieName {
         for lab in 1..name.labs() {
             for &c in name.rlabel(lab).unwrap().iter() {
                 let (one, two) = BYTE_TO_BITS[c as usize];
-                self.key.push(one)?;
+                self.key.try_push(one)?;
                 if two > 0 {
-                    self.key.push(two)?;
+                    self.key.try_push(two)?;
                 }
             }
-            self.key.push(SHIFT_NOBYTE)?;
+            self.key.try_push(SHIFT_NOBYTE)?;
         }
         // terminator is a double NOBYTE
-        self.key.push(SHIFT_NOBYTE)
+        self.key.try_push(SHIFT_NOBYTE)?;
+        Ok(())
     }
 
     pub fn make_dns_name(&self) -> Result<HeapName> {

@@ -2,15 +2,15 @@
 //! ============================
 //!
 //! This kind of name is decompressed and canonicalized to lower case.
-//! The name and label pointers are stored in its scratch pad.
+//! The name and label pointers are stored inline using ArrayVec.
 
 use crate::prelude::*;
 use std::str::{from_utf8, FromStr};
 
 #[derive(Debug, Default)]
 pub struct ScratchName {
-    lpos: ScratchPad<u8, MAX_LABS>,
-    name: ScratchPad<u8, MAX_NAME>,
+    lpos: ArrayVec<u8, MAX_LABS>,
+    name: ArrayVec<u8, MAX_NAME>,
 }
 
 impl_dns_name!(ScratchName);
@@ -62,7 +62,7 @@ impl LabelFromWire for ScratchName {
 impl ScratchName {
     #[inline(always)]
     pub fn new() -> Self {
-        ScratchName { lpos: ScratchPad::new(), name: ScratchPad::new() }
+        ScratchName { lpos: ArrayVec::new(), name: ArrayVec::new() }
     }
 
     pub fn clear(&mut self) {
@@ -83,16 +83,16 @@ impl ScratchName {
 
     fn add_label(&mut self, dodgy: Dodgy, rpos: usize, llen: u8) -> Result<()> {
         let wpos = self.nlen().try_into()?; // u8 > MAX_NAME
-        self.lpos.push(wpos)?;
-        self.name.push(llen)?;
+        self.lpos.try_push(wpos)?;
+        self.name.try_push(llen)?;
         for i in 0..llen as usize {
-            self.name.push(dodgy.get(rpos + i)?.to_ascii_lowercase())?;
+            self.name.try_push(dodgy.get(rpos + i)?.to_ascii_lowercase())?;
         }
         Ok(())
     }
 
     fn dodgy_from_text(&mut self, dodgy: Dodgy) -> Result<usize> {
-        let mut label = ScratchPad::<u8, MAX_LLEN>::new();
+        let mut label = ArrayVec::<u8, MAX_LLEN>::new();
         let mut root = 0;
         let mut pos = 0;
         while label_from_text(&mut label, dodgy, &mut pos)? {
@@ -111,7 +111,7 @@ impl ScratchName {
 }
 
 fn label_from_text(
-    label: &mut ScratchPad<u8, MAX_LLEN>,
+    label: &mut ArrayVec<u8, MAX_LLEN>,
     dodgy: Dodgy,
     pos: &mut usize,
 ) -> Result<bool> {
@@ -123,11 +123,11 @@ fn label_from_text(
                 // RFC 1035 peculiar decimal (not octal!) escapes
                 b'0'..=b'9' => {
                     let code = dodgy.slice(*pos, 3)?;
-                    label.push(u8::from_str(from_utf8(code)?)?)?;
+                    label.try_push(u8::from_str(from_utf8(code)?)?)?;
                     *pos += 3;
                 }
                 esc => {
-                    label.push(esc)?;
+                    label.try_push(esc)?;
                     *pos += 1;
                 }
             },
@@ -142,7 +142,7 @@ fn label_from_text(
             // always add a label when we see a delimiter
             b'.' => return Ok(true),
             // everything else
-            _ => label.push(byte)?,
+            _ => label.try_push(byte)?,
         }
     }
     Ok(!label.is_empty())
