@@ -69,8 +69,13 @@ impl HeapName {
         self.mem
     }
 
-    pub fn into_ptr(self) -> *const u8 {
-        self.mem
+    /// # Safety
+    /// The caller becomes responsible for the memory previously owned
+    /// by the HeapName.
+    pub unsafe fn into_ptr(self) -> *const u8 {
+        let ptr = self.mem;
+        std::mem::forget(self); // avoid double free
+        ptr
     }
 }
 
