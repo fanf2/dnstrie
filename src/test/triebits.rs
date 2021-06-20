@@ -18,8 +18,8 @@ pub fn exercise_vecs(vecs: Vecs) {
     let scratch_ord = scratch1.cmp(&scratch2);
     let mut triename1 = TrieName::new();
     let mut triename2 = TrieName::new();
-    triename1.from_dns_name(&scratch1).unwrap();
-    triename2.from_dns_name(&scratch2).unwrap();
+    triename1.from_dns_name(&scratch1);
+    triename2.from_dns_name(&scratch2);
     let slice1 = triename1.as_slice();
     let slice2 = triename2.as_slice();
     let slice_ord = slice1.cmp(slice2);

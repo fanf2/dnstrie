@@ -39,7 +39,7 @@ impl TrieName {
         self.key.clear();
     }
 
-    pub fn from_dns_name<T>(&mut self, name: &T) -> Result<()>
+    pub fn from_dns_name<T>(&mut self, name: &T)
     where
         T: DnsLabels,
     {
@@ -48,16 +48,15 @@ impl TrieName {
         for lab in 1..name.labs() {
             for &c in name.rlabel(lab).unwrap().iter() {
                 let (one, two) = BYTE_TO_BITS[c as usize];
-                self.key.try_push(one)?;
+                self.key.push(one);
                 if two > 0 {
-                    self.key.try_push(two)?;
+                    self.key.push(two);
                 }
             }
-            self.key.try_push(SHIFT_NOBYTE)?;
+            self.key.push(SHIFT_NOBYTE);
         }
         // terminator is a double NOBYTE
-        self.key.try_push(SHIFT_NOBYTE)?;
-        Ok(())
+        self.key.push(SHIFT_NOBYTE);
     }
 
     pub fn make_dns_name(&self) -> Result<HeapName> {

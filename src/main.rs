@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     println!("{}", name);
     println!("{:#?}", name);
     let mut key = TrieName::new();
-    key.from_dns_name(&name)?;
+    key.from_dns_name(&name);
     println!("{:#?}", key);
     Ok(())
 }
