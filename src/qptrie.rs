@@ -1,54 +1,80 @@
+#![allow(dead_code)]
+
 use crate::prelude::*;
+use core::mem::ManuallyDrop;
 
-enum CookedTwig<'t, T>
-where
-    T: Sized,
-{
-    Branch { offset: usize, twigs: BmpVec<RawTwig<'t, T>> },
-    Leaf { key: HeapName, val: &'t mut T },
+pub struct DnsTrie<T> {
+    len: usize,
+    root: Twig<T>,
 }
 
-struct RawTwig<'t, T> {
-    int: u64,
-    ptr: *mut (),
-    _marker: PhantomData<&'t mut T>,
-}
-
-impl<'t, T> From<RawTwig<'t, T>> for CookedTwig<'t, T> {
-    fn from(raw: RawTwig<'t, T>) -> CookedTwig<'t, T> {
-        unsafe {
-            if raw.int & BRANCH_TAG == 0 {
-                let key = HeapName::from_raw_parts(raw.int as *const u8);
-                let val = &mut *(raw.ptr as *mut T);
-                CookedTwig::Leaf { key, val }
-            } else {
-                let offset = (raw.int >> SHIFT_OFFSET) as usize;
-                let bmp = raw.int & MASK_BMP;
-                let ptr = raw.ptr as *mut RawTwig<'t, T>;
-                let twigs = BmpVec::from_raw_parts(bmp, ptr);
-                CookedTwig::Branch { offset, twigs }
-            }
-        }
+impl<T> Default for DnsTrie<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl<'t, T> From<CookedTwig<'t, T>> for RawTwig<'t, T> {
-    fn from(twig: CookedTwig<'t, T>) -> RawTwig<'t, T> {
-        unsafe {
-            match twig {
-                CookedTwig::Branch { offset, twigs } => {
-                    let (bmp, ptr) = twigs.into_raw_parts();
-                    let ptr = ptr as *mut ();
-                    let off = offset as u64;
-                    let int = BRANCH_TAG | bmp | off << SHIFT_OFFSET;
-                    RawTwig { int, ptr, _marker: PhantomData }
-                }
-                CookedTwig::Leaf { key, val } => {
-                    let int = key.into_ptr() as u64;
-                    let ptr = val as *mut T as *mut ();
-                    RawTwig { int, ptr, _marker: PhantomData }
-                }
-            }
+impl<T> DnsTrie<T> {
+    pub fn new() -> Self {
+        DnsTrie { len: 0, root: Twig::new() }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    #[allow(unused_variables)]
+    pub fn insert<'n, N>(&mut self, name: &'n N, val: T) -> Option<T>
+    where
+        N: DnsLabels,
+        HeapName: From<&'n N>,
+    {
+        let leaf = Twig::leaf_from(HeapName::from(name), val);
+        if self.len == 0 {
+            self.root = leaf;
+            self.len = 1;
+            return None;
         }
+
+        let mut key = TrieName::new();
+        key.from_dns_name(name);
+
+        unimplemented!();
+    }
+}
+
+union TwigData<T> {
+    element: ManuallyDrop<T>,
+    twigmut: *mut Twig<T>,
+    twigref: *const Twig<T>,
+}
+
+struct Twig<T> {
+    meta: u64,
+    data: TwigData<T>,
+}
+
+impl<T> Default for Twig<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Twig<T> {
+    fn new() -> Self {
+        // SAFETY: we are responsible for dropping the empty BmpVec.
+        let (_, twigs) = unsafe { BmpVec::new().into_raw_parts() };
+        Twig { meta: 0, data: TwigData { twigmut: twigs } }
+    }
+
+    fn leaf_from(key: HeapName, val: T) -> Self {
+        // SAFETY: we are responsible for dropping the key and value.
+        let meta = unsafe { key.into_ptr() as u64 };
+        let data = TwigData { element: ManuallyDrop::new(val) };
+        Twig { meta, data }
     }
 }
